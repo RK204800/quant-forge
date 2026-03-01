@@ -185,6 +185,26 @@ const CompareStrategies = () => {
     return rows;
   }, [selected]);
 
+  // Build rolling win rate data (30-trade window)
+  const rollingWinRateData = useMemo(() => {
+    if (selected.length === 0) return [];
+    const maxLen = Math.max(...selected.map((s) => s.trades.length));
+    const rows: Record<string, any>[] = [];
+    for (let i = 0; i < maxLen; i++) rows.push({ trade: i + 1 });
+
+    selected.forEach((s) => {
+      const window = 30;
+      const sorted = [...s.trades].sort((a, b) => new Date(a.exitTime).getTime() - new Date(b.exitTime).getTime());
+      for (let i = window - 1; i < sorted.length; i++) {
+        const slice = sorted.slice(i - window + 1, i + 1);
+        const wins = slice.filter((t) => t.pnlNet > 0).length;
+        if (rows[i]) rows[i][s.id] = (wins / window) * 100;
+      }
+    });
+
+    return rows;
+  }, [selected]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -345,6 +365,48 @@ const CompareStrategies = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 18%)" />
                     <XAxis dataKey="trade" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} label={{ value: "Trade #", position: "insideBottom", offset: -5, fill: "hsl(215 15% 55%)", fontSize: 10 }} />
                     <YAxis tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} />
+                    <Tooltip content={<CompareTooltip />} />
+                    {selected.map((s, i) => (
+                      <Area
+                        key={s.id}
+                        type="monotone"
+                        dataKey={s.id}
+                        name={s.name}
+                        stroke={COLORS[i % COLORS.length]}
+                        fill={`${COLORS[i % COLORS.length].replace(")", " / 0.06)")}`}
+                        strokeWidth={1.5}
+                        dot={false}
+                        connectNulls
+                      />
+                    ))}
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Rolling Win Rate comparison */}
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Rolling Win Rate (30-trade window)</CardTitle>
+                <div className="flex gap-3">
+                  {selected.map((s, i) => (
+                    <div key={s.id} className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                      <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[120px]">{s.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[250px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={rollingWinRateData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 18%)" />
+                    <XAxis dataKey="trade" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} label={{ value: "Trade #", position: "insideBottom", offset: -5, fill: "hsl(215 15% 55%)", fontSize: 10 }} />
+                    <YAxis tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${safeNum(v).toFixed(0)}%`} domain={[0, 100]} />
                     <Tooltip content={<CompareTooltip />} />
                     {selected.map((s, i) => (
                       <Area
