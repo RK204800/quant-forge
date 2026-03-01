@@ -1,32 +1,53 @@
 
 
-## Fix NinjaTrader CSV Parser Column Matching
+## Fix NinjaTrader CSV Parsing -- 4 Bugs Found
 
-### Problem
-The NinjaTrader parser uses **exact property access** (`row.Profit`, `row["Entry price"]`) for column lookups, while the Backtrader parser uses the robust `findCol()` fuzzy matcher. If the uploaded CSV has any variation in column naming (e.g., trailing spaces, "Net profit" vs "Profit", BOM characters), the Profit column isn't found, and the parser falls back to `computePnl()` which simply computes `(exitPrice - entryPrice) * quantity` -- the raw point difference without futures contract multipliers.
+I compared your uploaded CSV against the parser code and found 4 distinct bugs that cause incorrect results.
 
-For NQ futures (where 1 point = $20), this means a trade showing $530 profit gets stored as 26.5.
+### Your CSV Format
+```
+Trade number,Instrument,Account,Strategy,Market pos.,Qty,Entry price,Exit price,Entry time,Exit time,...,Profit,...,Commission,...,MAE,MFE,...
+1,NQ 03-26,Sim101,Axios V1.5_JL,Short,1,25510.25,25457.25,02-Jan-26 10:54:00 AM,...,$1055.64,...,$4.36,...,$0.00,$1060.00,...
+```
 
-### Solution
-Refactor the NinjaTrader parser to use `findCol()` for all column lookups, matching the robustness of the Backtrader parser. Also add more Profit column name candidates.
+---
 
-### Changes
+### Bug 1: Wrong parser selected (format detection)
+The header has "Trade number" which matches the TradingView check (`tradenumber`) before NinjaTrader gets a chance. The NinjaTrader check looks for "marketposition" but your CSV has "Market pos." which normalizes to "marketpos." -- no match.
+
+**Result**: Your file is parsed by the TradingView parser, which expects paired entry/exit rows and completely misinterprets the single-row-per-trade NinjaTrader format.
+
+**Fix** (`src/lib/parsers/index.ts`): Reorder detection so NinjaTrader is checked first. Add "tradenumber" combined with "entryprice" as a NinjaTrader signature (TradingView uses "Trade #" and a single "Price" column, not "Entry price"/"Exit price").
+
+### Bug 2: Dollar signs and accounting negatives in Profit/Commission/MAE/MFE
+Values like `$1055.64` and `($109.36)` are not handled by `safeFloat`. `parseFloat("$1055.64")` returns NaN, so all profit values become 0.
+
+**Fix** (`src/lib/parsers/utils.ts`): Strip `$`, commas, and convert `(value)` accounting notation to negative before parsing.
+
+### Bug 3: Date format "02-Jan-26 10:54:00 AM" not parsed correctly
+The format `DD-Mon-YY HH:mm:ss AM/PM` may parse the 2-digit year "26" as 1926 in some browsers, or fail entirely.
+
+**Fix** (`src/lib/parsers/utils.ts`): Add explicit parsing for `DD-Mon-YY` and `DD-Mon-YYYY` formats with 12-hour AM/PM time.
+
+### Bug 4: "Market pos." column not matched
+`findCol` candidates include "Market position" but not "Market pos." After stripping spaces/underscores, "marketpos." still doesn't match "marketposition" due to the trailing period and abbreviation.
+
+**Fix** (`src/lib/parsers/ninjatrader.ts`): Add "Market pos." and "Market pos" as candidates for the direction field.
+
+---
+
+### Changes Summary
+
+**`src/lib/parsers/utils.ts`**
+- `safeFloat`: Strip `$`, commas, and handle `(x.xx)` accounting negative format before parseFloat
+- `normalizeDateTime`: Add DD-Mon-YY(YY) pattern with 12-hour AM/PM support (month abbreviations like Jan, Feb, etc.)
+
+**`src/lib/parsers/index.ts`**
+- Reorder format detection: check NinjaTrader before TradingView
+- Use "tradenumber" + "entryprice" as a NinjaTrader signature (TradingView never has separate entry/exit price columns)
 
 **`src/lib/parsers/ninjatrader.ts`**
-- Replace all exact `row["Column Name"]` and `row.Column` accesses with `findCol(row, ...)` calls
-- Add comprehensive candidate names for each field:
-  - Profit: `"Profit", "profit", "Net profit", "Net P&L", "P&L", "pnl", "PnL"`
-  - Commission: `"Commission", "commission", "comm"`
-  - Entry time: `"Entry time", "EntryTime", "entry_time", "Entry Date", "entry_date"`
-  - Exit time: `"Exit time", "ExitTime", "exit_time", "Exit Date", "exit_date"`
-  - Market position / Direction: `"Market position", "MarketPosition", "direction", "Direction", "side", "Side", "type", "Type"`
-  - Entry price: `"Entry price", "EntryPrice", "entry_price", "Entry"`
-  - Exit price: `"Exit price", "ExitPrice", "exit_price", "Exit"`
-  - Quantity: `"Quantity", "quantity", "qty", "Qty", "size", "contracts", "Contracts"`
-  - Instrument: `"Instrument", "instrument", "ticker", "symbol", "Symbol", "Ticker"`
-  - MAE/MFE: `"MAE", "mae", "Max Adverse Excursion"` / `"MFE", "mfe", "Max Favorable Excursion"`
+- Add "Market pos.", "Market pos" as direction column candidates
+- Add "Trade number" as a candidate for any trade-number field if needed
 
-This ensures the parser handles any case/spacing/naming variations in NinjaTrader CSV exports.
-
-### Technical Detail
-The `findCol()` utility already does case-insensitive matching and strips underscores/spaces, so adding it here makes the NinjaTrader parser as resilient as the Backtrader one. No changes to `findCol` itself are needed.
+These fixes ensure your NQ futures CSV is correctly detected as NinjaTrader format, dates are parsed properly, and dollar-formatted profit values are read accurately.
