@@ -10,9 +10,9 @@ export function parseQuantConnect(content: string, strategyId: string): ParseRes
   try {
     const data = JSON.parse(content);
     const orders = data.Orders || {};
-    const startingBalance = 100000;
-    let runningEquity = startingBalance;
-    let peak = runningEquity;
+    const startingBalance = 0;
+    let runningEquity = 0;
+    let peak = 0;
     let initialPointAdded = false;
 
     Object.values(orders).forEach((order: any, i: number) => {

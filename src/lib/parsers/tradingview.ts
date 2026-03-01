@@ -15,9 +15,9 @@ export function parseTradingView(content: string, strategyId: string): ParseResu
   });
 
   const trades: Trade[] = [];
-  const startingBalance = 100000;
-  let runningEquity = startingBalance;
-  let peak = runningEquity;
+  const startingBalance = 0;
+  let runningEquity = 0;
+  let peak = 0;
   const equityCurve: EquityPoint[] = [];
   let initialPointAdded = false;
 

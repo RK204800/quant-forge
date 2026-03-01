@@ -7,9 +7,9 @@ export function parseBacktraderCSV(content: string, strategyId: string): ParseRe
   const warnings: string[] = [];
   const result = Papa.parse(content, { header: true, skipEmptyLines: true });
   const trades: Trade[] = [];
-  const startingBalance = 100000;
-  let runningEquity = startingBalance;
-  let peak = runningEquity;
+  const startingBalance = 0;
+  let runningEquity = 0;
+  let peak = 0;
   const equityCurve: EquityPoint[] = [];
 
   result.data.forEach((row: any, i: number) => {

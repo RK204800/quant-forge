@@ -34,14 +34,14 @@ function generateTrades(strategyId: string, count: number, startDate: Date, inst
   return trades;
 }
 
-function generateEquityCurve(trades: Trade[], initialCapital: number): EquityPoint[] {
-  let equity = initialCapital;
-  let peak = equity;
-  const curve: EquityPoint[] = [{ timestamp: trades[0]?.entryTime || new Date().toISOString(), equity, drawdown: 0 }];
+function generateEquityCurve(trades: Trade[], _initialCapital: number): EquityPoint[] {
+  let equity = 0;
+  let peak = 0;
+  const curve: EquityPoint[] = [{ timestamp: trades[0]?.entryTime || new Date().toISOString(), equity: 0, drawdown: 0 }];
   trades.forEach((t) => {
     equity += t.pnlNet;
     if (equity > peak) peak = equity;
-    curve.push({ timestamp: t.exitTime, equity: +equity.toFixed(2), drawdown: +((peak - equity) / peak).toFixed(4) });
+    curve.push({ timestamp: t.exitTime, equity: +equity.toFixed(2), drawdown: peak > 0 ? +((peak - equity) / peak).toFixed(4) : 0 });
   });
   return curve;
 }
