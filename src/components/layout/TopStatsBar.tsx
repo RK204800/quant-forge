@@ -1,6 +1,8 @@
-import { TrendingUp, TrendingDown, BarChart3, Target } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, Target, Plus } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useStrategies } from "@/hooks/use-strategies";
 import { calculateMetrics } from "@/lib/analytics";
+import { Button } from "@/components/ui/button";
 
 interface StatProps {
   label: string;
@@ -50,6 +52,15 @@ export function TopStatsBar() {
       <Stat label="Max Drawdown" value={maxDD ? `$${Math.abs(maxDD).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"} icon={<TrendingDown className="h-4 w-4" />} />
       <div className="w-px h-8 bg-border" />
       <Stat label="Active Strategies" value={activeStrategies.length.toString()} icon={<Target className="h-4 w-4" />} />
+      <div className="w-px h-8 bg-border" />
+      <div className="flex items-center px-4 py-2">
+        <Button asChild size="sm" className="gap-1.5">
+          <Link to="/strategies/upload">
+            <Plus className="h-4 w-4" />
+            Upload
+          </Link>
+        </Button>
+      </div>
     </div>
   );
 }
