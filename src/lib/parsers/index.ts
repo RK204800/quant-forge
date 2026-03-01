@@ -24,7 +24,9 @@ export function detectFormat(content: string, fileName: string): FileFormat {
   const lines = clean.split("\n").map((l) => l.trim()).filter(Boolean);
   const header = (lines[0] ?? "").toLowerCase().replace(/[_\s]+/g, "");
 
-  if (header.includes("instrument") && header.includes("marketposition")) return "ninjatrader";
+  if (header.includes("instrument") && (header.includes("marketposition") || header.includes("marketpos"))) return "ninjatrader";
+  // NinjaTrader: has separate entry/exit price columns; TradingView does not
+  if ((header.includes("tradenumber") || header.includes("tradeno")) && header.includes("entryprice")) return "ninjatrader";
   if (header.includes("trade#") || header.includes("tradeno") || header.includes("tradenumber")) return "tradingview";
   if (header.includes("ref") || header.includes("ticker")) return "backtrader";
 
