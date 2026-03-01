@@ -339,33 +339,52 @@ const CompareStrategies = () => {
     return { months: [...allMonths].sort(), data };
   }, [selected]);
 
+  // Shared duration buckets
+  const DURATION_BUCKETS = useMemo(() => [
+    { label: "< 1h", max: 1 / 24 },
+    { label: "1-4h", max: 4 / 24 },
+    { label: "4-8h", max: 8 / 24 },
+    { label: "1d", max: 1 },
+    { label: "2-3d", max: 3 },
+    { label: "4-7d", max: 7 },
+    { label: "1-2w", max: 14 },
+    { label: "2-4w", max: 28 },
+    { label: "> 4w", max: Infinity },
+  ], []);
+
+  const getTradesInBucket = useCallback((trades: typeof selected[0]["trades"], bi: number) => {
+    const prevMax = bi > 0 ? DURATION_BUCKETS[bi - 1].max : 0;
+    const max = DURATION_BUCKETS[bi].max;
+    return trades.filter((t) => {
+      const days = (new Date(t.exitTime).getTime() - new Date(t.entryTime).getTime()) / (1000 * 60 * 60 * 24);
+      return days > prevMax && days <= max;
+    });
+  }, [DURATION_BUCKETS]);
+
   // Build trade duration distribution per strategy
   const durationDistData = useMemo(() => {
     if (selected.length === 0) return [];
-    const buckets = [
-      { label: "< 1h", max: 1 / 24 },
-      { label: "1-4h", max: 4 / 24 },
-      { label: "4-8h", max: 8 / 24 },
-      { label: "1d", max: 1 },
-      { label: "2-3d", max: 3 },
-      { label: "4-7d", max: 7 },
-      { label: "1-2w", max: 14 },
-      { label: "2-4w", max: 28 },
-      { label: "> 4w", max: Infinity },
-    ];
-
-    return buckets.map((b, bi) => {
+    return DURATION_BUCKETS.map((b, bi) => {
       const row: Record<string, any> = { bucket: b.label };
-      const prevMax = bi > 0 ? buckets[bi - 1].max : 0;
+      selected.forEach((s) => { row[s.id] = getTradesInBucket(s.trades, bi).length; });
+      return row;
+    });
+  }, [selected, DURATION_BUCKETS, getTradesInBucket]);
+
+  // Build win rate by duration bucket per strategy
+  const winRateByDurationData = useMemo(() => {
+    if (selected.length === 0) return [];
+    return DURATION_BUCKETS.map((b, bi) => {
+      const row: Record<string, any> = { bucket: b.label };
       selected.forEach((s) => {
-        row[s.id] = s.trades.filter((t) => {
-          const days = (new Date(t.exitTime).getTime() - new Date(t.entryTime).getTime()) / (1000 * 60 * 60 * 24);
-          return days > prevMax && days <= b.max;
-        }).length;
+        const trades = getTradesInBucket(s.trades, bi);
+        if (trades.length === 0) { row[s.id] = null; return; }
+        const wins = trades.filter((t) => t.pnlNet > 0).length;
+        row[s.id] = (wins / trades.length) * 100;
       });
       return row;
     });
-  }, [selected]);
+  }, [selected, DURATION_BUCKETS, getTradesInBucket]);
 
   if (isLoading) {
     return (
@@ -758,6 +777,32 @@ const CompareStrategies = () => {
                     <Tooltip
                       contentStyle={{ backgroundColor: "hsl(220 13% 12%)", border: "1px solid hsl(220 13% 20%)", borderRadius: 8, fontSize: 12 }}
                       labelStyle={{ color: "hsl(220 9% 46%)" }}
+                    />
+                    {selected.map((s, i) => (
+                      <Bar key={s.id} dataKey={s.id} name={s.name} fill={COLORS[i % COLORS.length]} radius={[2, 2, 0, 0]} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Win Rate by Duration */}
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Win Rate by Duration (%)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={winRateByDurationData} barCategoryGap="20%">
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 18%)" />
+                    <XAxis dataKey="bucket" tick={{ fontSize: 10, fill: "hsl(220 9% 46%)" }} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "hsl(220 9% 46%)" }} tickFormatter={(v) => `${v}%`} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "hsl(220 13% 12%)", border: "1px solid hsl(220 13% 20%)", borderRadius: 8, fontSize: 12 }}
+                      labelStyle={{ color: "hsl(220 9% 46%)" }}
+                      formatter={(v: any) => v != null ? [`${Number(v).toFixed(1)}%`] : ["—"]}
                     />
                     {selected.map((s, i) => (
                       <Bar key={s.id} dataKey={s.id} name={s.name} fill={COLORS[i % COLORS.length]} radius={[2, 2, 0, 0]} />
