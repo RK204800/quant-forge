@@ -74,7 +74,7 @@ export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
         <Upload className={`h-10 w-10 ${dragOver ? "text-primary" : "text-muted-foreground"}`} />
         <div className="text-center">
           <p className="text-sm font-medium text-foreground">Drop backtest file here or click to browse</p>
-          <p className="text-xs text-muted-foreground mt-1">Supports Backtrader CSV, NinjaTrader, QuantConnect JSON, Generic CSV</p>
+          <p className="text-xs text-muted-foreground mt-1">Supports Backtrader CSV, NinjaTrader, QuantConnect JSON, TradingView, Generic CSV</p>
           <Button
             type="button"
             variant="ghost"
