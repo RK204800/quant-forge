@@ -55,7 +55,7 @@ export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
           let text: string;
           if (isExcelFile(file.name)) {
             const buffer = await file.arrayBuffer();
-            text = xlsxToCSV(buffer);
+            text = await xlsxToCSV(buffer);
           } else {
             text = await file.text();
           }
