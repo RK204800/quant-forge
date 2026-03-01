@@ -14,7 +14,184 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      equity_curves: {
+        Row: {
+          benchmark_return: number | null
+          created_at: string
+          drawdown: number
+          equity: number
+          id: string
+          strategy_id: string
+          timestamp: string
+          user_id: string
+        }
+        Insert: {
+          benchmark_return?: number | null
+          created_at?: string
+          drawdown?: number
+          equity: number
+          id?: string
+          strategy_id: string
+          timestamp: string
+          user_id: string
+        }
+        Update: {
+          benchmark_return?: number | null
+          created_at?: string
+          drawdown?: number
+          equity?: number
+          id?: string
+          strategy_id?: string
+          timestamp?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equity_curves_strategy_id_fkey"
+            columns: ["strategy_id"]
+            isOneToOne: false
+            referencedRelation: "strategies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      strategies: {
+        Row: {
+          asset_class: string | null
+          backtest_engine: string | null
+          broker: string | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          status: string
+          timeframe: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          asset_class?: string | null
+          backtest_engine?: string | null
+          broker?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          status?: string
+          timeframe?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          asset_class?: string | null
+          backtest_engine?: string | null
+          broker?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          status?: string
+          timeframe?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      trades: {
+        Row: {
+          commission: number
+          created_at: string
+          direction: string
+          entry_price: number
+          entry_time: string
+          exit_price: number
+          exit_time: string
+          external_id: string | null
+          id: string
+          instrument: string
+          notes: string | null
+          pnl_gross: number
+          pnl_net: number
+          quantity: number
+          slippage: number
+          strategy_id: string
+          user_id: string
+        }
+        Insert: {
+          commission?: number
+          created_at?: string
+          direction: string
+          entry_price: number
+          entry_time: string
+          exit_price: number
+          exit_time: string
+          external_id?: string | null
+          id?: string
+          instrument?: string
+          notes?: string | null
+          pnl_gross?: number
+          pnl_net?: number
+          quantity?: number
+          slippage?: number
+          strategy_id: string
+          user_id: string
+        }
+        Update: {
+          commission?: number
+          created_at?: string
+          direction?: string
+          entry_price?: number
+          entry_time?: string
+          exit_price?: number
+          exit_time?: string
+          external_id?: string | null
+          id?: string
+          instrument?: string
+          notes?: string | null
+          pnl_gross?: number
+          pnl_net?: number
+          quantity?: number
+          slippage?: number
+          strategy_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trades_strategy_id_fkey"
+            columns: ["strategy_id"]
+            isOneToOne: false
+            referencedRelation: "strategies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
