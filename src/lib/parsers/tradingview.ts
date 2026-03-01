@@ -29,8 +29,10 @@ export function parseTradingView(content: string, strategyId: string): ParseResu
       const entryRow = rows[0];
       const exitRow = rows.length > 1 ? rows[1] : rows[0];
 
-      const signal = (entryRow.Signal || entryRow.signal || entryRow.Type || "").toLowerCase();
-      const direction: "long" | "short" = signal.includes("short") ? "short" : "long";
+      const typeField = (entryRow.Type || entryRow.type || "").toLowerCase();
+      const signalField = (entryRow.Signal || entryRow.signal || "").toLowerCase();
+      const combined = `${typeField} ${signalField}`;
+      const direction: "long" | "short" = combined.includes("short") ? "short" : "long";
 
       const profit = parseFloat(exitRow.Profit || exitRow.profit || exitRow["P&L"] || "0");
       const cumProfit = parseFloat(exitRow["Cum. Profit"] || exitRow["Cumulative Profit"] || "0");
