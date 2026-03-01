@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { UploadZone, ParsedFile } from "@/components/upload/UploadZone";
 import { ParseResult } from "@/lib/parsers";
 import { MetricsGrid } from "@/components/dashboard/MetricsGrid";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Check, Loader2, X, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, Check, Loader2, X, ChevronDown, ChevronRight, GripVertical } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSaveStrategy } from "@/hooks/use-strategies";
 
@@ -30,6 +30,8 @@ const UploadStrategy = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveProgress, setSaveProgress] = useState({ current: 0, total: 0 });
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const navigate = useNavigate();
   const saveStrategy = useSaveStrategy();
 
@@ -51,6 +53,39 @@ const UploadStrategy = () => {
 
   const updateName = (id: string, name: string) => {
     setQueue((prev) => prev.map((item) => (item.id === id ? { ...item, name } : item)));
+  };
+
+  const handleDragStart = (id: string) => {
+    setDraggedId(id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (draggedId && draggedId !== id) setDragOverId(id);
+  };
+
+  const handleDrop = (targetId: string) => {
+    if (!draggedId || draggedId === targetId) {
+      setDraggedId(null);
+      setDragOverId(null);
+      return;
+    }
+    setQueue((prev) => {
+      const fromIndex = prev.findIndex((q) => q.id === draggedId);
+      const toIndex = prev.findIndex((q) => q.id === targetId);
+      if (fromIndex === -1 || toIndex === -1) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+    setDraggedId(null);
+    setDragOverId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedId(null);
+    setDragOverId(null);
   };
 
   const handleSaveAll = async () => {
@@ -135,11 +170,22 @@ const UploadStrategy = () => {
               {queue.map((item) => {
                 const isExpanded = expandedId === item.id;
                 return (
-                  <div key={item.id} className="border border-border rounded-md overflow-hidden">
+                  <div
+                    key={item.id}
+                    className={`border rounded-md overflow-hidden transition-all ${
+                      draggedId === item.id ? "opacity-40 border-primary" : dragOverId === item.id ? "border-primary bg-primary/5" : "border-border"
+                    }`}
+                    draggable={!saving}
+                    onDragStart={() => handleDragStart(item.id)}
+                    onDragOver={(e) => handleDragOver(e, item.id)}
+                    onDrop={() => handleDrop(item.id)}
+                    onDragEnd={handleDragEnd}
+                  >
                     <div
                       className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors"
                       onClick={() => setExpandedId(isExpanded ? null : item.id)}
                     >
+                      <GripVertical className="h-3 w-3 text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing" />
                       {isExpanded ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />}
 
                       <span className="text-xs text-muted-foreground font-mono truncate w-36 shrink-0">{item.fileName}</span>
