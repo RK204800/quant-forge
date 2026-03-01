@@ -41,7 +41,7 @@ export function MetricsGrid({ metrics }: MetricsGridProps) {
       <MetricCard label="Profit Factor" value={metrics.profitFactor === Infinity ? "∞" : metrics.profitFactor.toFixed(2)} icon={<Percent className="h-4 w-4" />} color={metrics.profitFactor >= 1.5 ? "text-profit" : "text-warning"} />
       <MetricCard label="Expectancy" value={`$${metrics.expectancy.toFixed(2)}`} icon={<Zap className="h-4 w-4" />} color={metrics.expectancy >= 0 ? "text-profit" : "text-loss"} />
       <MetricCard label="Total Trades" value={metrics.totalTrades.toString()} icon={<BarChart3 className="h-4 w-4" />} />
-      <MetricCard label="Avg Hold (days)" value={metrics.avgHoldingPeriod.toFixed(1)} icon={<Clock className="h-4 w-4" />} />
+      <MetricCard label="Avg Hold (min)" value={(metrics.avgHoldingPeriod * 24 * 60).toFixed(0)} icon={<Clock className="h-4 w-4" />} />
     </div>
   );
 }
