@@ -11,7 +11,7 @@ import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { Link, useSearchParams } from "react-router-dom";
 import { Strategy, StrategyMetrics, EquityPoint } from "@/types";
-import { Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, BarChart } from "recharts";
+import { Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, BarChart, ReferenceLine } from "recharts";
 import { format } from "date-fns";
 
 const COLORS = [
@@ -839,6 +839,7 @@ const CompareStrategies = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 18%)" />
                     <XAxis dataKey="bucket" tick={{ fontSize: 10, fill: "hsl(220 9% 46%)" }} />
                     <YAxis tick={{ fontSize: 10, fill: "hsl(220 9% 46%)" }} tickFormatter={(v) => `$${safeNum(v).toFixed(0)}`} />
+                    <ReferenceLine y={0} stroke="hsl(220 9% 46%)" strokeDasharray="4 4" strokeOpacity={0.6} />
                     <Tooltip
                       contentStyle={{ backgroundColor: "hsl(220 13% 12%)", border: "1px solid hsl(220 13% 20%)", borderRadius: 8, fontSize: 12 }}
                       labelStyle={{ color: "hsl(220 9% 46%)" }}
