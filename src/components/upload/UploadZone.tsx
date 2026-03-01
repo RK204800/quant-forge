@@ -10,12 +10,20 @@ SPY,2025-01-02T10:00:00,2025-01-02T15:30:00,long,475.50,478.20,100,270,4.50
 AAPL,2025-01-03T09:30:00,2025-01-03T14:00:00,short,182.00,179.50,50,125,3.00
 TSLA,2025-01-06T10:15:00,2025-01-06T16:00:00,long,248.00,245.30,30,-81,2.50`;
 
-function downloadSampleCSV() {
-  const blob = new Blob([SAMPLE_CSV], { type: "text/csv" });
+const SAMPLE_TV_CSV = `Trade #,Type,Signal,Date/Time,Price,Contracts,Profit,Cum. Profit,Run-up,Drawdown
+1,Entry Long,Buy,2025-01-02 10:00,475.50,100,,,,
+1,Exit Long,Sell,2025-01-02 15:30,478.20,100,270,270,300,10
+2,Entry Short,Sell,2025-01-03 09:30,182.00,50,,,,
+2,Exit Short,Buy,2025-01-03 14:00,179.50,50,125,395,130,5
+3,Entry Long,Buy,2025-01-06 10:15,248.00,30,,,,
+3,Exit Long,Sell,2025-01-06 16:00,245.30,30,-81,314,20,90`;
+
+function downloadSample(content: string, filename: string) {
+  const blob = new Blob([content], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "sample_backtest.csv";
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -75,15 +83,26 @@ export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
         <div className="text-center">
           <p className="text-sm font-medium text-foreground">Drop backtest file here or click to browse</p>
           <p className="text-xs text-muted-foreground mt-1">Supports Backtrader CSV, NinjaTrader, QuantConnect JSON, TradingView, Generic CSV</p>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="mt-2 gap-1 text-xs text-muted-foreground hover:text-foreground"
-            onClick={(e) => { e.stopPropagation(); downloadSampleCSV(); }}
-          >
-            <Download className="h-3 w-3" /> Download sample CSV
-          </Button>
+          <div className="flex gap-2 mt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-xs text-muted-foreground hover:text-foreground"
+              onClick={(e) => { e.stopPropagation(); downloadSample(SAMPLE_CSV, "sample_backtest.csv"); }}
+            >
+              <Download className="h-3 w-3" /> Generic CSV
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-xs text-muted-foreground hover:text-foreground"
+              onClick={(e) => { e.stopPropagation(); downloadSample(SAMPLE_TV_CSV, "sample_tradingview.csv"); }}
+            >
+              <Download className="h-3 w-3" /> TradingView CSV
+            </Button>
+          </div>
         </div>
         {fileName && !error && (
           <div className="flex items-center gap-2 text-xs text-primary">
