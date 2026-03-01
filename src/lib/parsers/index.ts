@@ -9,6 +9,7 @@ export interface ParseResult {
   equityCurve: EquityPoint[];
   format: FileFormat;
   warnings: string[];
+  parameters?: Record<string, any>;
 }
 
 export function detectFormat(content: string, fileName: string): FileFormat {

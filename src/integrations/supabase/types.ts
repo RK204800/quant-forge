@@ -90,8 +90,12 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          is_favorite: boolean | null
           name: string
+          parameter_template: Json | null
+          parameters: Json | null
           status: string
+          strategy_class: string | null
           timeframe: string | null
           updated_at: string
           user_id: string
@@ -103,8 +107,12 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_favorite?: boolean | null
           name: string
+          parameter_template?: Json | null
+          parameters?: Json | null
           status?: string
+          strategy_class?: string | null
           timeframe?: string | null
           updated_at?: string
           user_id: string
@@ -116,10 +124,68 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_favorite?: boolean | null
           name?: string
+          parameter_template?: Json | null
+          parameters?: Json | null
           status?: string
+          strategy_class?: string | null
           timeframe?: string | null
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      strategy_tag_mapping: {
+        Row: {
+          strategy_id: string
+          tag_id: string
+        }
+        Insert: {
+          strategy_id: string
+          tag_id: string
+        }
+        Update: {
+          strategy_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strategy_tag_mapping_strategy_id_fkey"
+            columns: ["strategy_id"]
+            isOneToOne: false
+            referencedRelation: "strategies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "strategy_tag_mapping_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "strategy_tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      strategy_tags: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
           user_id?: string
         }
         Relationships: []
