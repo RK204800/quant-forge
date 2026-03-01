@@ -56,6 +56,20 @@ function mapDbEquityPoint(row: any): EquityPoint {
   };
 }
 
+function normalizeCurveToZero(curve: EquityPoint[]): EquityPoint[] {
+  if (!curve.length) return curve;
+  const sorted = [...curve].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const baseline = sorted[0].equity;
+  if (baseline === 0) return sorted;
+  let peak = 0;
+  return sorted.map((pt) => {
+    const equity = +(pt.equity - baseline).toFixed(2);
+    if (equity > peak) peak = equity;
+    const drawdown = peak > 0 ? +((peak - equity) / peak).toFixed(4) : 0;
+    return { ...pt, equity, drawdown };
+  });
+}
+
 export function useStrategies() {
   const { user } = useAuth();
 
@@ -75,7 +89,7 @@ export function useStrategies() {
 
       const [tradesRes, equityRes, tagMappingsRes] = await Promise.all([
         supabase.from("trades").select("*").in("strategy_id", strategyIds).order("entry_time"),
-        supabase.from("equity_curves").select("*").in("strategy_id", strategyIds).order("timestamp"),
+        supabase.from("equity_curves").select("*").in("strategy_id", strategyIds).order("timestamp").order("created_at"),
         supabase.from("strategy_tag_mapping").select("strategy_id, tag_id, strategy_tags(*)").in("strategy_id", strategyIds),
       ]);
 
@@ -111,7 +125,7 @@ export function useStrategies() {
       }
 
       return strategiesData.map((s) =>
-        mapDbStrategy(s, tradesByStrategy[s.id] ?? [], equityByStrategy[s.id] ?? [], tagsByStrategy[s.id] ?? [])
+        mapDbStrategy(s, tradesByStrategy[s.id] ?? [], normalizeCurveToZero(equityByStrategy[s.id] ?? []), tagsByStrategy[s.id] ?? [])
       );
     },
     enabled: !!user,
@@ -129,7 +143,7 @@ export function useStrategy(id: string | undefined) {
       const [stratRes, tradesRes, equityRes, tagMappingsRes] = await Promise.all([
         supabase.from("strategies").select("*").eq("id", id).single(),
         supabase.from("trades").select("*").eq("strategy_id", id).order("entry_time"),
-        supabase.from("equity_curves").select("*").eq("strategy_id", id).order("timestamp"),
+        supabase.from("equity_curves").select("*").eq("strategy_id", id).order("timestamp").order("created_at"),
         supabase.from("strategy_tag_mapping").select("strategy_id, tag_id, strategy_tags(*)").eq("strategy_id", id),
       ]);
 
@@ -155,7 +169,7 @@ export function useStrategy(id: string | undefined) {
       return mapDbStrategy(
         stratRes.data,
         (tradesRes.data ?? []).map(mapDbTrade),
-        (equityRes.data ?? []).map(mapDbEquityPoint),
+        normalizeCurveToZero((equityRes.data ?? []).map(mapDbEquityPoint)),
         tags
       );
     },
@@ -297,34 +311,28 @@ export function useRecomputeEquity() {
     mutationFn: async (strategyId: string) => {
       if (!user) throw new Error("Not authenticated");
 
-      // Fetch trades for this strategy
       const { data: trades, error: tErr } = await supabase
         .from("trades")
         .select("*")
         .eq("strategy_id", strategyId)
-        .order("exit_time");
+        .order("entry_time")
+        .order("exit_time")
+        .order("id");
       if (tErr) throw tErr;
       if (!trades?.length) throw new Error("No trades found for this strategy");
 
-      // Delete existing equity curve
       const { error: dErr } = await supabase
         .from("equity_curves")
         .delete()
         .eq("strategy_id", strategyId);
       if (dErr) throw dErr;
 
-      // Recompute from $0 cumulative PnL
+      // Seed at earliest entry_time with equity = 0
+      const seedTime = trades[0].entry_time;
       let runningEquity = 0;
       let peak = 0;
-      const equityRows = [
-        {
-          strategy_id: strategyId,
-          user_id: user.id,
-          timestamp: trades[0].exit_time,
-          equity: 0,
-          drawdown: 0,
-          benchmark_return: null,
-        },
+      const equityRows: { strategy_id: string; user_id: string; timestamp: string; equity: number; drawdown: number; benchmark_return: null }[] = [
+        { strategy_id: strategyId, user_id: user.id, timestamp: seedTime, equity: 0, drawdown: 0, benchmark_return: null },
       ];
 
       for (const t of trades) {
@@ -332,16 +340,11 @@ export function useRecomputeEquity() {
         if (runningEquity > peak) peak = runningEquity;
         const dd = peak > 0 ? +((peak - runningEquity) / peak).toFixed(4) : 0;
         equityRows.push({
-          strategy_id: strategyId,
-          user_id: user.id,
-          timestamp: t.exit_time,
-          equity: +runningEquity.toFixed(2),
-          drawdown: dd,
-          benchmark_return: null,
+          strategy_id: strategyId, user_id: user.id,
+          timestamp: t.exit_time, equity: +runningEquity.toFixed(2), drawdown: dd, benchmark_return: null,
         });
       }
 
-      // Insert in batches
       for (let i = 0; i < equityRows.length; i += 500) {
         const batch = equityRows.slice(i, i + 500);
         const { error } = await supabase.from("equity_curves").insert(batch);
@@ -435,6 +438,78 @@ export function useRemoveTag() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["strategies"] });
       queryClient.invalidateQueries({ queryKey: ["strategy"] });
+    },
+  });
+}
+
+export function useRecomputeAllEquity() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not authenticated");
+
+      const { data: strategiesData, error: sErr } = await supabase
+        .from("strategies")
+        .select("id")
+        .order("created_at");
+      if (sErr) throw sErr;
+      if (!strategiesData?.length) return { success: 0, failed: 0 };
+
+      let success = 0;
+      let failed = 0;
+
+      for (const s of strategiesData) {
+        try {
+          const { data: trades, error: tErr } = await supabase
+            .from("trades")
+            .select("*")
+            .eq("strategy_id", s.id)
+            .order("entry_time")
+            .order("exit_time")
+            .order("id");
+          if (tErr) throw tErr;
+          if (!trades?.length) { failed++; continue; }
+
+          const { error: dErr } = await supabase.from("equity_curves").delete().eq("strategy_id", s.id);
+          if (dErr) throw dErr;
+
+          const seedTime = trades[0].entry_time;
+          let runningEquity = 0;
+          let peak = 0;
+          const equityRows: any[] = [
+            { strategy_id: s.id, user_id: user.id, timestamp: seedTime, equity: 0, drawdown: 0, benchmark_return: null },
+          ];
+          for (const t of trades) {
+            runningEquity += Number(t.pnl_net);
+            if (runningEquity > peak) peak = runningEquity;
+            const dd = peak > 0 ? +((peak - runningEquity) / peak).toFixed(4) : 0;
+            equityRows.push({
+              strategy_id: s.id, user_id: user.id,
+              timestamp: t.exit_time, equity: +runningEquity.toFixed(2), drawdown: dd, benchmark_return: null,
+            });
+          }
+          for (let i = 0; i < equityRows.length; i += 500) {
+            const batch = equityRows.slice(i, i + 500);
+            const { error } = await supabase.from("equity_curves").insert(batch);
+            if (error) throw error;
+          }
+          success++;
+        } catch {
+          failed++;
+        }
+      }
+
+      return { success, failed };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      queryClient.invalidateQueries({ queryKey: ["strategy"] });
+      if (result) toast.success(`Recomputed ${result.success}/${result.success + result.failed} strategies`);
+    },
+    onError: (error: any) => {
+      toast.error(`Bulk recompute failed: ${error.message}`);
     },
   });
 }

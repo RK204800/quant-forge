@@ -36,12 +36,13 @@ describe("TradingView parser", () => {
     expect(t3.pnlNet).toBe(-81);
   });
 
-  it("generates equity curve", () => {
+  it("generates equity curve starting at $0", () => {
     const result = parseTradingView(SAMPLE_TV_CSV, "test-strategy");
-    expect(result.equityCurve).toHaveLength(3);
-    expect(result.equityCurve[0].equity).toBe(100270);
-    expect(result.equityCurve[1].equity).toBe(100395);
-    expect(result.equityCurve[2].equity).toBe(100314);
+    expect(result.equityCurve).toHaveLength(4); // seed + 3 trades
+    expect(result.equityCurve[0].equity).toBe(0);
+    expect(result.equityCurve[1].equity).toBe(270);
+    expect(result.equityCurve[2].equity).toBe(395);
+    expect(result.equityCurve[3].equity).toBe(314);
   });
 
   it("works via parseFile", () => {
