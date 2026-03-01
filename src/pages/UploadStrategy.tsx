@@ -8,12 +8,32 @@ import { calculateMetrics } from "@/lib/analytics";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Check } from "lucide-react";
-import { Link } from "react-router-dom";
+import { ArrowLeft, Check, Loader2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { useSaveStrategy } from "@/hooks/use-strategies";
 
 const UploadStrategy = () => {
   const [result, setResult] = useState<ParseResult | null>(null);
   const [name, setName] = useState("");
+  const navigate = useNavigate();
+  const saveStrategy = useSaveStrategy();
+
+  const handleSave = () => {
+    if (!result || !name) return;
+    saveStrategy.mutate(
+      {
+        name,
+        trades: result.trades,
+        equityCurve: result.equityCurve,
+        format: result.format,
+      },
+      {
+        onSuccess: (strategyId) => {
+          navigate(`/strategies/${strategyId}`);
+        },
+      }
+    );
+  };
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -48,8 +68,12 @@ const UploadStrategy = () => {
           <EquityCurve data={result.equityCurve} title="Preview: Equity Curve" />
           <TradesTable trades={result.trades} />
 
-          <Button className="gap-2" disabled={!name}>
-            <Check className="h-4 w-4" /> Save Strategy
+          <Button className="gap-2" disabled={!name || saveStrategy.isPending} onClick={handleSave}>
+            {saveStrategy.isPending ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</>
+            ) : (
+              <><Check className="h-4 w-4" /> Save Strategy</>
+            )}
           </Button>
         </>
       )}
