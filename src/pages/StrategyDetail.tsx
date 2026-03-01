@@ -1,5 +1,5 @@
 import { useParams, Link } from "react-router-dom";
-import { useStrategy } from "@/hooks/use-strategies";
+import { useStrategy, useRecomputeEquity } from "@/hooks/use-strategies";
 import { calculateMetrics, getMonthlyReturns } from "@/lib/analytics";
 import { MetricsGrid } from "@/components/dashboard/MetricsGrid";
 import { EquityCurve } from "@/components/dashboard/EquityCurve";
@@ -18,12 +18,14 @@ import { WalkForwardChart } from "@/components/dashboard/WalkForwardChart";
 import { ParametersTable } from "@/components/dashboard/ParametersTable";
 import { TradeChart } from "@/components/dashboard/TradeChart";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, RefreshCw } from "lucide-react";
 
 const StrategyDetail = () => {
   const { id } = useParams();
   const { data: strategy, isLoading } = useStrategy(id);
+  const recomputeEquity = useRecomputeEquity();
 
   if (isLoading) {
     return (
@@ -56,6 +58,16 @@ const StrategyDetail = () => {
           <h1 className="text-2xl font-bold font-mono tracking-tight">{strategy.name}</h1>
           <Badge variant={strategy.status === "active" ? "default" : "secondary"}>{strategy.status}</Badge>
           {strategy.strategyClass && <Badge variant="outline">{strategy.strategyClass}</Badge>}
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto font-mono text-xs"
+            disabled={recomputeEquity.isPending}
+            onClick={() => recomputeEquity.mutate(strategy.id)}
+          >
+            <RefreshCw className={`h-3 w-3 ${recomputeEquity.isPending ? "animate-spin" : ""}`} />
+            {recomputeEquity.isPending ? "Recomputing…" : "Recompute Equity"}
+          </Button>
         </div>
         <p className="text-sm text-muted-foreground mt-1">{strategy.description}</p>
         <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
