@@ -33,6 +33,9 @@ function downloadSample(content: string, filename: string) {
 export interface ParsedFile {
   result: ParseResult;
   fileName: string;
+  rawContent?: string;
+  headers?: string[];
+  sampleRows?: Record<string, string>[];
 }
 
 interface UnmappedFile {
@@ -86,7 +89,8 @@ export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
             errors.push(`${file.name}: No trades found${detail}`);
             return;
           }
-          results.push({ result, fileName: file.name });
+          const { headers: h, sampleRows: sr } = extractHeaders(text);
+          results.push({ result, fileName: file.name, rawContent: text, headers: h, sampleRows: sr });
         } catch {
           errors.push(`${file.name}: Failed to parse`);
         }
