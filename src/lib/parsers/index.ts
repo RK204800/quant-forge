@@ -50,6 +50,23 @@ const PARSERS: [FileFormat, ParserFn][] = [
   ["tradingview", parseTradingView],
 ];
 
+export function extractHeaders(content: string): { headers: string[]; sampleRows: Record<string, string>[] } {
+  const clean = content.replace(/^\uFEFF/, "").replace(/^sep=.\r?\n/i, "");
+  const lines = clean.split(/\r?\n/).filter(Boolean);
+  if (lines.length === 0) return { headers: [], sampleRows: [] };
+
+  // Use papa-style split for first line as headers
+  const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
+  const sampleRows: Record<string, string>[] = [];
+  for (let i = 1; i <= Math.min(3, lines.length - 1); i++) {
+    const vals = lines[i].split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
+    const row: Record<string, string> = {};
+    headers.forEach((h, idx) => { row[h] = vals[idx] ?? ""; });
+    sampleRows.push(row);
+  }
+  return { headers, sampleRows };
+}
+
 export function parseFile(content: string, fileName: string, strategyId: string): ParseResult {
   // Pre-process: strip BOM, sep= directives, metadata rows
   const preprocessed = fileName.endsWith(".json") ? content : stripPrelude(content);
