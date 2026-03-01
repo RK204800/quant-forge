@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { computeRollingSharpe } from "@/lib/analytics";
 import { useStrategies } from "@/hooks/use-strategies";
 import { calculateMetrics } from "@/lib/analytics";
@@ -6,7 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, GitCompareArrows, X } from "lucide-react";
+import { ArrowLeft, GitCompareArrows, X, Download, Image } from "lucide-react";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 import { Link, useSearchParams } from "react-router-dom";
 import { Strategy, StrategyMetrics, EquityPoint } from "@/types";
 import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from "recharts";
@@ -79,6 +81,36 @@ const CompareStrategies = () => {
   const { data: strategies = [], isLoading } = useStrategies();
   const [searchParams] = useSearchParams();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const exportAsImage = useCallback(async () => {
+    if (!contentRef.current) return;
+    setExporting(true);
+    try {
+      const canvas = await html2canvas(contentRef.current, { backgroundColor: "#0a0a0f", scale: 2, useCORS: true });
+      const link = document.createElement("a");
+      link.download = `strategy-comparison-${format(new Date(), "yyyy-MM-dd")}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } finally { setExporting(false); }
+  }, []);
+
+  const exportAsPDF = useCallback(async () => {
+    if (!contentRef.current) return;
+    setExporting(true);
+    try {
+      const canvas = await html2canvas(contentRef.current, { backgroundColor: "#0a0a0f", scale: 2, useCORS: true });
+      const imgData = canvas.toDataURL("image/png");
+      const imgW = canvas.width;
+      const imgH = canvas.height;
+      const pdfW = 297;
+      const pdfH = (imgH * pdfW) / imgW;
+      const pdf = new jsPDF({ orientation: pdfH > 420 ? "portrait" : "landscape", unit: "mm", format: [pdfW, pdfH] });
+      pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
+      pdf.save(`strategy-comparison-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+    } finally { setExporting(false); }
+  }, []);
 
   // Pre-select strategies from URL params
   useEffect(() => {
@@ -219,13 +251,27 @@ const CompareStrategies = () => {
         <Link to="/strategies" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 mb-2">
           <ArrowLeft className="h-3 w-3" /> Back to Strategies
         </Link>
-        <h1 className="text-2xl font-bold font-mono tracking-tight flex items-center gap-2">
-          <GitCompareArrows className="h-5 w-5" /> Compare Strategies
-        </h1>
-        <p className="text-sm text-muted-foreground">Select 2 or more strategies to compare side by side</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold font-mono tracking-tight flex items-center gap-2">
+              <GitCompareArrows className="h-5 w-5" /> Compare Strategies
+            </h1>
+            <p className="text-sm text-muted-foreground">Select 2 or more strategies to compare side by side</p>
+          </div>
+          {selected.length >= 2 && (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="gap-2" onClick={exportAsImage} disabled={exporting}>
+                <Image className="h-4 w-4" /> PNG
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2" onClick={exportAsPDF} disabled={exporting}>
+                <Download className="h-4 w-4" /> PDF
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Strategy selector */}
+      <div ref={contentRef} className="space-y-6">
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-mono">Select Strategies ({selectedIds.length} selected)</CardTitle>
@@ -479,6 +525,7 @@ const CompareStrategies = () => {
           Select at least one more strategy to compare
         </div>
       )}
+      </div>
     </div>
   );
 };
