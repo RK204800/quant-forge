@@ -15,21 +15,16 @@ export function parseTradingView(content: string, strategyId: string): ParseResu
   });
 
   const trades: Trade[] = [];
-  let runningEquity = 100000;
+  const startingBalance = 100000;
+  let runningEquity = startingBalance;
   let peak = runningEquity;
   const equityCurve: EquityPoint[] = [];
+  let initialPointAdded = false;
 
   Object.entries(tradeGroups).forEach(([tradeNum, rows], idx) => {
     try {
       const entryRow = rows[0];
       const exitRow = rows.length > 1 ? rows[1] : rows[0];
-
-      const typeField = (entryRow.Type || entryRow.type || "").toLowerCase();
-      const signalField = (entryRow.Signal || entryRow.signal || "").toLowerCase();
-      const combined = `${typeField} ${signalField}`;
-      const direction: "long" | "short" = combined.includes("short") ? "short" : "long";
-
-      const profit = safeFloat(exitRow.Profit || exitRow.profit || exitRow["P&L"]);
 
       const entryDateRaw = entryRow["Date/Time"] || entryRow["DateTime"] || entryRow["date_time"] || entryRow["Date"] || "";
       const exitDateRaw = exitRow["Date/Time"] || exitRow["DateTime"] || exitRow["date_time"] || exitRow["Date"] || "";
@@ -42,11 +37,27 @@ export function parseTradingView(content: string, strategyId: string): ParseResu
         return;
       }
 
+      // Insert initial equity point before first trade
+      if (!initialPointAdded) {
+        equityCurve.push({ timestamp: entryTime, equity: startingBalance, drawdown: 0 });
+        initialPointAdded = true;
+      }
+
+      const typeField = (entryRow.Type || entryRow.type || "").toLowerCase();
+      const signalField = (entryRow.Signal || entryRow.signal || "").toLowerCase();
+      const combined = `${typeField} ${signalField}`;
+      const direction: "long" | "short" = combined.includes("short") ? "short" : "long";
+
+      const profit = safeFloat(exitRow.Profit || exitRow.profit || exitRow["P&L"]);
       const entryPrice = safeFloat(entryRow.Price || entryRow.price);
       const exitPrice = safeFloat(exitRow.Price || exitRow.price);
       const quantity = safeFloat(entryRow.Contracts || entryRow.contracts || entryRow.Shares || entryRow.shares || entryRow.Qty, 1);
       const effectivePnl = profit === 0 && entryPrice !== 0 && exitPrice !== 0
         ? computePnl(direction, entryPrice, exitPrice, quantity) : profit;
+
+      // MAE/MFE columns
+      const maeVal = exitRow.MAE || exitRow.mae;
+      const mfeVal = exitRow.MFE || exitRow.mfe;
 
       const trade: Trade = {
         id: `tv-${idx}`,
@@ -63,6 +74,8 @@ export function parseTradingView(content: string, strategyId: string): ParseResu
         commission: 0,
         slippage: 0,
         instrument: entryRow.Symbol || entryRow.symbol || entryRow.Ticker || "UNKNOWN",
+        ...(maeVal !== undefined ? { mae: safeFloat(maeVal) } : {}),
+        ...(mfeVal !== undefined ? { mfe: safeFloat(mfeVal) } : {}),
       };
 
       trades.push(trade);

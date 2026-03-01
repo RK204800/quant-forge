@@ -10,16 +10,13 @@ export function parseQuantConnect(content: string, strategyId: string): ParseRes
   try {
     const data = JSON.parse(content);
     const orders = data.Orders || {};
-    let runningEquity = 100000;
+    const startingBalance = 100000;
+    let runningEquity = startingBalance;
     let peak = runningEquity;
+    let initialPointAdded = false;
 
     Object.values(orders).forEach((order: any, i: number) => {
       if (order.Status !== "Filled" && order.Status !== 3) return;
-      const price = safeFloat(order.Price);
-      const qty = Math.abs(safeFloat(order.Quantity));
-      const direction: "long" | "short" = (order.Direction || "buy").toLowerCase().includes("sell") ? "short" : "long";
-      const lastFillPrice = safeFloat(order.LastFillPrice || order.Price);
-      const pnl = computePnl(direction, price, lastFillPrice, qty);
 
       const entryTime = normalizeDateTime(order.CreatedTime || order.Time || "");
       const exitTime = normalizeDateTime(order.LastFillTime || order.Time || "") || entryTime;
@@ -28,6 +25,18 @@ export function parseQuantConnect(content: string, strategyId: string): ParseRes
         warnings.push(`Order ${i + 1}: unparseable date`);
         return;
       }
+
+      // Insert initial equity point before first trade
+      if (!initialPointAdded) {
+        equityCurve.push({ timestamp: entryTime, equity: startingBalance, drawdown: 0 });
+        initialPointAdded = true;
+      }
+
+      const price = safeFloat(order.Price);
+      const qty = Math.abs(safeFloat(order.Quantity));
+      const direction: "long" | "short" = (order.Direction || "buy").toLowerCase().includes("sell") ? "short" : "long";
+      const lastFillPrice = safeFloat(order.LastFillPrice || order.Price);
+      const pnl = computePnl(direction, price, lastFillPrice, qty);
 
       const trade: Trade = {
         id: `qc-${i}`,

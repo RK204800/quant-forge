@@ -7,14 +7,28 @@ export function parseNinjaTrader(content: string, strategyId: string): ParseResu
   const warnings: string[] = [];
   const result = Papa.parse(content, { header: true, skipEmptyLines: true });
   const trades: Trade[] = [];
-  let runningEquity = 100000;
+  const startingBalance = 100000;
+  let runningEquity = startingBalance;
   let peak = runningEquity;
   const equityCurve: EquityPoint[] = [];
 
   result.data.forEach((row: any, i: number) => {
     try {
+      // Insert initial equity point before first trade
+      if (i === 0) {
+        const firstDateRaw = row["Entry time"] || row.EntryTime || "";
+        const firstTime = normalizeDateTime(firstDateRaw);
+        if (firstTime) {
+          equityCurve.push({ timestamp: firstTime, equity: startingBalance, drawdown: 0 });
+        }
+      }
+
       const pnl = safeFloat(row.Profit || row.profit);
       const commission = safeFloat(row.Commission);
+
+      // NinjaTrader natively exports MAE and MFE
+      const maeVal = row.MAE || row.mae || row["Max Adverse Excursion"];
+      const mfeVal = row.MFE || row.mfe || row["Max Favorable Excursion"];
 
       const entryDateRaw = row["Entry time"] || row.EntryTime || "";
       const exitDateRaw = row["Exit time"] || row.ExitTime || "";
@@ -48,6 +62,8 @@ export function parseNinjaTrader(content: string, strategyId: string): ParseResu
         commission,
         slippage: 0,
         instrument: row.Instrument || "UNKNOWN",
+        ...(maeVal !== undefined ? { mae: safeFloat(maeVal) } : {}),
+        ...(mfeVal !== undefined ? { mfe: safeFloat(mfeVal) } : {}),
       };
       trades.push(trade);
       runningEquity += trade.pnlNet;

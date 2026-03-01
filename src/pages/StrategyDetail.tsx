@@ -6,7 +6,17 @@ import { EquityCurve } from "@/components/dashboard/EquityCurve";
 import { MonthlyHeatmap } from "@/components/dashboard/MonthlyHeatmap";
 import { TradeDistribution } from "@/components/dashboard/TradeDistribution";
 import { TradesTable } from "@/components/dashboard/TradesTable";
+import { PeriodAnalysis } from "@/components/dashboard/PeriodAnalysis";
+import { PerformanceSummary } from "@/components/dashboard/PerformanceSummary";
+import { ExpectancyCurve } from "@/components/dashboard/ExpectancyCurve";
+import { StreakAnalysis } from "@/components/dashboard/StreakAnalysis";
+import { RollingSharpe } from "@/components/dashboard/RollingSharpe";
+import { MonteCarloChart } from "@/components/dashboard/MonteCarloChart";
+import { RROptimizer } from "@/components/dashboard/RROptimizer";
+import { RobustnessScore } from "@/components/dashboard/RobustnessScore";
+import { WalkForwardChart } from "@/components/dashboard/WalkForwardChart";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft } from "lucide-react";
 
 const StrategyDetail = () => {
@@ -48,15 +58,50 @@ const StrategyDetail = () => {
         </div>
       </div>
 
-      <MetricsGrid metrics={metrics} />
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="bg-muted">
+          <TabsTrigger value="overview" className="text-xs font-mono">Overview</TabsTrigger>
+          <TabsTrigger value="analysis" className="text-xs font-mono">Analysis</TabsTrigger>
+          <TabsTrigger value="performance" className="text-xs font-mono">Performance</TabsTrigger>
+          <TabsTrigger value="robustness" className="text-xs font-mono">Robustness</TabsTrigger>
+          <TabsTrigger value="tradelog" className="text-xs font-mono">Trade Log</TabsTrigger>
+        </TabsList>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <EquityCurve data={strategy.equityCurve} />
-        <TradeDistribution trades={strategy.trades} />
-      </div>
+        <TabsContent value="overview" className="space-y-4 mt-4">
+          <MetricsGrid metrics={metrics} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <EquityCurve data={strategy.equityCurve} />
+            <TradeDistribution trades={strategy.trades} />
+          </div>
+          <MonthlyHeatmap data={monthlyReturns} />
+        </TabsContent>
 
-      <MonthlyHeatmap data={monthlyReturns} />
-      <TradesTable trades={strategy.trades} />
+        <TabsContent value="analysis" className="mt-4">
+          <PeriodAnalysis trades={strategy.trades} />
+        </TabsContent>
+
+        <TabsContent value="performance" className="space-y-4 mt-4">
+          <PerformanceSummary trades={strategy.trades} equityCurve={strategy.equityCurve} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ExpectancyCurve trades={strategy.trades} />
+            <RollingSharpe trades={strategy.trades} />
+          </div>
+          <StreakAnalysis trades={strategy.trades} />
+        </TabsContent>
+
+        <TabsContent value="robustness" className="space-y-4 mt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <MonteCarloChart trades={strategy.trades} />
+            <RobustnessScore trades={strategy.trades} equityCurve={strategy.equityCurve} />
+          </div>
+          <RROptimizer trades={strategy.trades} />
+          <WalkForwardChart trades={strategy.trades} equityCurve={strategy.equityCurve} />
+        </TabsContent>
+
+        <TabsContent value="tradelog" className="mt-4">
+          <TradesTable trades={strategy.trades} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

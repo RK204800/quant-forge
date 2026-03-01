@@ -7,14 +7,26 @@ export function parseBacktraderCSV(content: string, strategyId: string): ParseRe
   const warnings: string[] = [];
   const result = Papa.parse(content, { header: true, skipEmptyLines: true });
   const trades: Trade[] = [];
-  let runningEquity = 100000;
+  const startingBalance = 100000;
+  let runningEquity = startingBalance;
   let peak = runningEquity;
   const equityCurve: EquityPoint[] = [];
 
   result.data.forEach((row: any, i: number) => {
     try {
+      // Insert initial equity point before first trade
+      if (i === 0) {
+        const firstDateRaw = String(findCol(row, "entry_date", "EntryDate", "date", "Date", "open_time", "datetime", "DateTime", "entry_time", "EntryTime") ?? "");
+        const firstTime = normalizeDateTime(firstDateRaw);
+        if (firstTime) {
+          equityCurve.push({ timestamp: firstTime, equity: startingBalance, drawdown: 0 });
+        }
+      }
+
       const pnl = safeFloat(findCol(row, "pnl", "PnL", "profit", "Profit", "P&L", "P/L", "net_profit", "Net P&L"));
       const commission = safeFloat(findCol(row, "commission", "Commission", "comm"));
+      const mae = findCol(row, "mae", "MAE", "Max Adverse Excursion");
+      const mfe = findCol(row, "mfe", "MFE", "Max Favorable Excursion");
 
       const entryDateRaw = String(findCol(row, "entry_date", "EntryDate", "date", "Date", "open_time", "datetime", "DateTime", "entry_time", "EntryTime") ?? "");
       const exitDateRaw = String(findCol(row, "exit_date", "ExitDate", "close_date", "exit_time", "ExitTime", "close_time") ?? "");
@@ -49,6 +61,8 @@ export function parseBacktraderCSV(content: string, strategyId: string): ParseRe
         commission,
         slippage: 0,
         instrument: String(findCol(row, "ticker", "symbol", "Instrument", "Symbol", "Ticker", "instrument") ?? "UNKNOWN"),
+        ...(mae !== undefined && mae !== null ? { mae: safeFloat(mae) } : {}),
+        ...(mfe !== undefined && mfe !== null ? { mfe: safeFloat(mfe) } : {}),
       };
       trades.push(trade);
       runningEquity += trade.pnlNet;
