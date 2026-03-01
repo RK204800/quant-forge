@@ -4,6 +4,7 @@ import { Upload, FileText, AlertCircle, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { parseFile } from "@/lib/parsers";
 import { ParseResult } from "@/lib/parsers";
+import { xlsxToCSV, isExcelFile } from "@/lib/parsers/xlsx-reader";
 
 const SAMPLE_CSV = `ticker,entry_date,exit_date,direction,entry_price,exit_price,size,pnl,commission
 SPY,2025-01-02T10:00:00,2025-01-02T15:30:00,long,475.50,478.20,100,270,4.50
@@ -51,7 +52,13 @@ export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
     await Promise.all(
       files.map(async (file) => {
         try {
-          const text = await file.text();
+          let text: string;
+          if (isExcelFile(file.name)) {
+            const buffer = await file.arrayBuffer();
+            text = xlsxToCSV(buffer);
+          } else {
+            text = await file.text();
+          }
           const result = parseFile(text, file.name, strategyId);
           if (result.trades.length === 0) {
             errors.push(`${file.name}: No trades found`);
@@ -88,7 +95,7 @@ export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
         onClick={() => {
           const input = document.createElement("input");
           input.type = "file";
-          input.accept = ".csv,.json,.txt";
+          input.accept = ".csv,.json,.txt,.xlsx,.xls";
           input.multiple = true;
           input.onchange = (e) => {
             const files = (e.target as HTMLInputElement).files;
