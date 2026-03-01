@@ -311,6 +311,34 @@ const CompareStrategies = () => {
     });
   }, [selected]);
 
+  // Build monthly returns per strategy
+  const monthlyReturnsData = useMemo(() => {
+    if (selected.length === 0) return { months: [] as string[], data: {} as Record<string, Record<string, number>> };
+    const data: Record<string, Record<string, number>> = {};
+    const allMonths = new Set<string>();
+
+    selected.forEach((s) => {
+      const sorted = [...s.equityCurve].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      if (sorted.length === 0) return;
+      // Group equity by month, take first and last per month
+      const byMonth = new Map<string, { first: number; last: number }>();
+      sorted.forEach((p) => {
+        const mk = format(new Date(p.timestamp), "yyyy-MM");
+        const entry = byMonth.get(mk);
+        if (!entry) byMonth.set(mk, { first: p.equity, last: p.equity });
+        else entry.last = p.equity;
+      });
+      const monthlyRet: Record<string, number> = {};
+      byMonth.forEach((v, mk) => {
+        allMonths.add(mk);
+        monthlyRet[mk] = v.first !== 0 ? ((v.last - v.first) / v.first) * 100 : 0;
+      });
+      data[s.id] = monthlyRet;
+    });
+
+    return { months: [...allMonths].sort(), data };
+  }, [selected]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -625,6 +653,57 @@ const CompareStrategies = () => {
                           return (
                             <td key={selected[ci].id} className="text-center font-mono text-xs py-2 px-3" style={{ backgroundColor: bg }}>
                               {corr.toFixed(2)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Monthly Returns Heatmap */}
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Monthly Returns Heatmap (%)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="text-sm">
+                  <thead>
+                    <tr>
+                      <th className="text-left text-xs text-muted-foreground font-mono py-2 pr-3 sticky left-0 bg-card" />
+                      {monthlyReturnsData.months.map((m) => (
+                        <th key={m} className="text-center text-[10px] font-mono text-muted-foreground py-2 px-2 min-w-[60px]">
+                          {format(new Date(m + "-01"), "MMM yy")}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selected.map((s, si) => (
+                      <tr key={s.id}>
+                        <td className="text-xs font-mono text-muted-foreground py-1.5 pr-3 whitespace-nowrap sticky left-0 bg-card">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[si % COLORS.length] }} />
+                            <span className="truncate max-w-[100px]">{s.name}</span>
+                          </div>
+                        </td>
+                        {monthlyReturnsData.months.map((mk) => {
+                          const val = monthlyReturnsData.data[s.id]?.[mk];
+                          if (val === undefined) return <td key={mk} className="text-center text-[10px] font-mono py-1.5 px-2 text-muted-foreground">—</td>;
+                          const abs = Math.min(Math.abs(val), 5);
+                          const hue = val >= 0 ? 142 : 0;
+                          const intensity = abs / 5;
+                          return (
+                            <td
+                              key={mk}
+                              className="text-center text-[10px] font-mono py-1.5 px-2"
+                              style={{ backgroundColor: `hsl(${hue} 70% 45% / ${intensity * 0.5})` }}
+                            >
+                              {val >= 0 ? "+" : ""}{val.toFixed(1)}
                             </td>
                           );
                         })}
