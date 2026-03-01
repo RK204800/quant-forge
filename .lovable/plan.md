@@ -1,58 +1,38 @@
 
 
-## Fix Analytics for $0-Based Equity Curves
+## Add/Remove Strategies from Dashboard
 
-### Problem
-After the equity curve recompute, all curves now start at $0 (cumulative PnL). But every analytics function in `src/lib/analytics.ts` uses percentage-based math that divides by equity values, causing:
+### Current Behavior
+The dashboard shows ALL strategies and uses the first one as the "primary" deep-dive. There's no way to control which strategies appear.
 
-- **Max Drawdown**: Shows absurd values like -6894% or -164% because it calculates `(peak - equity) / peak` where peak can be tiny (e.g., $2.75) and equity deeply negative (e.g., -$362), producing 13000%+ drawdown ratios
-- **Annualized Return**: Always returns 0 because `startEquity <= 0` guard triggers (equity starts at $0)
-- **Sharpe/Sortino/Calmar Ratios**: All 0 or broken because they depend on annualized return
-- **Monthly Returns Heatmap**: Division by zero when monthly start equity is 0
-- **Daily Returns**: Division by zero when previous day equity is 0
+### Approach
+Add a `show_on_dashboard` boolean column to the `strategies` table (default `true` so existing strategies remain visible). The dashboard will filter to only show pinned strategies, and provide UI to add/remove them.
 
-### Solution
-Switch all calculations from percentage-of-equity to absolute-dollar-based metrics, which is the correct approach for cumulative PnL curves without a defined starting capital.
+### Changes
 
-### Changes (single file: `src/lib/analytics.ts`)
+**1. Database Migration**
+- Add `show_on_dashboard boolean DEFAULT true` to the `strategies` table
+- Existing strategies will automatically appear on dashboard (backward compatible)
 
-**1. `maxDrawdown` -- Use absolute drawdown as a fraction of peak-to-trough range**
-- Track peak equity and compute drawdown as absolute dollar amount: `peak - equity`
-- Return the max absolute drawdown value (in dollars)
-- Display it as a dollar value rather than a percentage (update MetricsGrid label)
-- Alternative: use stored `drawdown` field from equity_curves which is already computed correctly during recompute
+**2. Update `src/hooks/use-strategies.ts`**
+- Add a `useToggleDashboard(id, current)` hook (similar to existing `useToggleFavorite`) that flips `show_on_dashboard`
+- Update `useUpdateStrategy` to accept `showOnDashboard` field
 
-**2. `computeAnnualizedReturn` -- Handle zero-start curves**
-- For $0-based curves, use additive return approach instead of geometric
-- Calculate as `(finalEquity / totalDays) * 365` (annualized dollar return), or
-- Use a notional capital approach: assume $10,000 notional, compute percentage return as `totalPnL / notional`
+**3. Update `src/pages/Index.tsx`**
+- Filter strategies to only those with `showOnDashboard === true`
+- Add an "X" remove button on each strategy card to unpin it from dashboard
+- Add an "Add Strategy" button/dropdown that lists strategies NOT on the dashboard, letting the user add them back
+- When no strategies are pinned, show a prompt to add strategies (different from the "no strategies exist" empty state)
+- Primary deep-dive uses the first pinned strategy
 
-**3. `getResampledDailyReturns` -- Use dollar differences instead of percentage changes**
-- Change from `(equity[i] - equity[i-1]) / equity[i-1]` to dollar differences
-- For Sharpe/Sortino, use dollar-based standard deviation (still valid for ratio calculations when combined with dollar-based mean return)
+**4. Update `src/types/index.ts`**
+- Add `showOnDashboard: boolean` to the `Strategy` type
 
-**4. `getMonthlyReturns` -- Use dollar differences**
-- Change from `(end - start) / start * 100` to `end - start` (absolute dollar change per month)
-- Update MonthlyHeatmap display to show dollar values instead of percentages
-
-**5. Update `MetricsGrid` display (`src/components/dashboard/MetricsGrid.tsx`)**
-- Max Drawdown: show as dollar value `$X` instead of percentage `-X%`
-- Annualized Return: show as dollar value or keep as percentage with notional capital
-
-**6. Update `MonthlyHeatmap` (`src/components/dashboard/MonthlyHeatmap.tsx`)**
-- Display monthly returns as dollar values instead of percentages
+**5. Update `mapDbStrategy` in `src/hooks/use-strategies.ts`**
+- Map `show_on_dashboard` to the new field
 
 ### Technical Details
 
-The key insight is that cumulative PnL curves (starting at $0) are not the same as portfolio equity curves (starting at some capital). Percentage-based metrics require a capital base. The cleanest fix is:
+The remove button will be a small "X" icon in the top-right corner of each strategy card (with `e.preventDefault()` to avoid navigating to the strategy detail). The "Add Strategy" control will be a Popover with a checklist of all available strategies, showing checkmarks for those already on the dashboard.
 
-1. For drawdown: use the pre-computed `drawdown` field from the equity curve data (already calculated correctly during recompute as `(peak - equity) / peak` with proper peak tracking), or fall back to absolute dollar drawdown
-2. For Sharpe/Sortino: use dollar-based daily PnL differences (not returns), which is standard practice for futures/derivatives trading analytics
-3. For monthly heatmap: show dollar PnL per month (more intuitive for traders anyway)
-4. For annualized return: display total return and annualized dollar PnL rather than trying to compute a meaningless percentage
-
-### Files to modify
-- `src/lib/analytics.ts` -- Core calculation fixes
-- `src/components/dashboard/MetricsGrid.tsx` -- Update Max Drawdown display format
-- `src/components/dashboard/MonthlyHeatmap.tsx` -- Update to dollar-based display
-- `src/pages/Index.tsx` -- Update Max DD display in strategy cards
+No RLS changes needed -- the existing user-owned UPDATE policy covers this column.
