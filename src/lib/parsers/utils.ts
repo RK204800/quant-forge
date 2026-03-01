@@ -90,15 +90,66 @@ export function computePnl(direction: "long" | "short", entryPrice: number, exit
     : (exitPrice - entryPrice) * quantity;
 }
 
+/** Normalize a header token: lowercase, strip all non-alphanumeric chars */
+export function normalizeHeader(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 export function findCol(row: Record<string, unknown>, ...candidates: string[]): unknown {
-  const normalize = (s: string) => s.toLowerCase().replace(/[_\s.]+/g, "");
   for (const c of candidates) {
-    const lc = normalize(c);
+    const lc = normalizeHeader(c);
     for (const key of Object.keys(row)) {
-      if (normalize(key) === lc) {
+      if (normalizeHeader(key) === lc) {
         return row[key];
       }
     }
   }
   return undefined;
+}
+
+/**
+ * Known trade-table column tokens used for header-row detection scoring.
+ */
+const TRADE_COLUMN_TOKENS = new Set([
+  "tradenumber", "trade", "tradeno", "instrument", "symbol", "ticker",
+  "entryprice", "exitprice", "entrydate", "exitdate", "entrytime", "exittime",
+  "profit", "pnl", "netprofit", "netpnl", "pl", "commission",
+  "quantity", "qty", "contracts", "size", "direction", "side", "type",
+  "marketposition", "marketpos", "price", "datetime", "date", "signal",
+  "mae", "mfe", "runup", "drawdown", "cumprofit",
+]);
+
+/**
+ * Score a CSV header line: how many columns match known trade-table tokens.
+ */
+export function scoreHeaderRow(headerLine: string): number {
+  const cols = headerLine.split(",").map((c) => normalizeHeader(c.replace(/^"|"$/g, "")));
+  return cols.filter((c) => c.length > 0 && TRADE_COLUMN_TOKENS.has(c)).length;
+}
+
+/**
+ * Strip BOM, `sep=` directives, and metadata rows above the real header.
+ * Returns the content starting from the detected header row.
+ */
+export function stripPrelude(content: string): string {
+  let clean = content.replace(/^\uFEFF/, "");
+  // Remove sep= directive line
+  clean = clean.replace(/^sep=.\r?\n/i, "");
+
+  const lines = clean.split(/\r?\n/);
+  let bestIdx = 0;
+  let bestScore = 0;
+  const scanLimit = Math.min(lines.length, 30);
+  for (let i = 0; i < scanLimit; i++) {
+    const score = scoreHeaderRow(lines[i]);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+  // Only skip rows if we found a header with at least 3 matching columns
+  if (bestScore >= 3 && bestIdx > 0) {
+    return lines.slice(bestIdx).join("\n");
+  }
+  return clean;
 }

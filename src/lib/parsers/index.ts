@@ -3,6 +3,7 @@ import { parseBacktraderCSV } from "./backtrader";
 import { parseNinjaTrader } from "./ninjatrader";
 import { parseQuantConnect } from "./quantconnect";
 import { parseTradingView } from "./tradingview";
+import { normalizeHeader, stripPrelude } from "./utils";
 
 export interface ParseResult {
   trades: Trade[];
@@ -19,30 +20,74 @@ export function detectFormat(content: string, fileName: string): FileFormat {
       if (data.Orders || data.TotalPerformance) return "quantconnect";
     } catch {}
   }
-  // Strip BOM and normalize
+
   const clean = content.replace(/^\uFEFF/, "");
   const lines = clean.split("\n").map((l) => l.trim()).filter(Boolean);
-  const header = (lines[0] ?? "").toLowerCase().replace(/[_\s]+/g, "");
+  const header = normalizeHeader(lines[0] ?? "");
 
+  // NinjaTrader: has separate entry/exit price columns or marketpos
   if (header.includes("instrument") && (header.includes("marketposition") || header.includes("marketpos"))) return "ninjatrader";
-  // NinjaTrader: has separate entry/exit price columns; TradingView does not
   if ((header.includes("tradenumber") || header.includes("tradeno")) && header.includes("entryprice")) return "ninjatrader";
-  if (header.includes("trade#") || header.includes("tradeno") || header.includes("tradenumber")) return "tradingview";
+
+  // TradingView: "Trade #" with single Price column and paired entry/exit rows
+  if (header.includes("trade") && header.includes("signal")) return "tradingview";
+
+  // Backtrader / generic
   if (header.includes("ref") || header.includes("ticker")) return "backtrader";
 
-  // Fallback: if header has trade-like columns, try tradingview
+  // Fallback heuristics
+  if (header.includes("entryprice") || header.includes("exitprice")) return "ninjatrader";
   if (header.includes("profit") && header.includes("price")) return "tradingview";
 
   return "generic";
 }
 
+type ParserFn = (content: string, strategyId: string) => ParseResult;
+
+const PARSERS: [FileFormat, ParserFn][] = [
+  ["ninjatrader", parseNinjaTrader],
+  ["backtrader", parseBacktraderCSV],
+  ["tradingview", parseTradingView],
+];
+
 export function parseFile(content: string, fileName: string, strategyId: string): ParseResult {
-  const format = detectFormat(content, fileName);
+  // Pre-process: strip BOM, sep= directives, metadata rows
+  const preprocessed = fileName.endsWith(".json") ? content : stripPrelude(content);
+
+  const format = detectFormat(preprocessed, fileName);
+
+  // Try detected format first
+  let result: ParseResult;
   switch (format) {
-    case "backtrader": return parseBacktraderCSV(content, strategyId);
-    case "ninjatrader": return parseNinjaTrader(content, strategyId);
-    case "quantconnect": return parseQuantConnect(content, strategyId);
-    case "tradingview": return parseTradingView(content, strategyId);
-    default: return parseBacktraderCSV(content, strategyId); // generic fallback
+    case "quantconnect":
+      return parseQuantConnect(preprocessed, strategyId);
+    case "ninjatrader":
+      result = parseNinjaTrader(preprocessed, strategyId);
+      break;
+    case "tradingview":
+      result = parseTradingView(preprocessed, strategyId);
+      break;
+    case "backtrader":
+    default:
+      result = parseBacktraderCSV(preprocessed, strategyId);
+      break;
   }
+
+  // If detected parser found trades, return
+  if (result.trades.length > 0) return result;
+
+  // Fallback: try all parsers, pick the one with most trades
+  let bestResult = result;
+  for (const [fmt, parser] of PARSERS) {
+    if (fmt === format) continue; // already tried
+    try {
+      const alt = parser(preprocessed, strategyId);
+      if (alt.trades.length > bestResult.trades.length) {
+        bestResult = alt;
+        bestResult.warnings.unshift(`Auto-detected as "${fmt}" (fallback from "${format}")`);
+      }
+    } catch { /* skip */ }
+  }
+
+  return bestResult;
 }
