@@ -1,4 +1,6 @@
 import { TrendingUp, TrendingDown, BarChart3, Target } from "lucide-react";
+import { useStrategies } from "@/hooks/use-strategies";
+import { calculateMetrics } from "@/lib/analytics";
 
 interface StatProps {
   label: string;
@@ -27,15 +29,27 @@ function Stat({ label, value, change, icon }: StatProps) {
 }
 
 export function TopStatsBar() {
+  const { data: strategies = [] } = useStrategies();
+
+  const activeStrategies = strategies.filter((s) => s.status === "active");
+  const allTrades = strategies.flatMap((s) => s.trades);
+  const totalPnl = allTrades.reduce((sum, t) => sum + t.pnlNet, 0);
+
+  let maxDD = 0;
+  strategies.forEach((s) => {
+    const m = calculateMetrics(s.trades, s.equityCurve);
+    if (m.maxDrawdown > maxDD) maxDD = m.maxDrawdown;
+  });
+
   return (
     <div className="flex items-center border-b border-border bg-card/50 overflow-x-auto">
-      <Stat label="Portfolio Value" value="$247,832" change={12.4} icon={<TrendingUp className="h-4 w-4" />} />
+      <Stat label="Total P&L" value={`$${totalPnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} icon={<TrendingUp className="h-4 w-4" />} />
       <div className="w-px h-8 bg-border" />
-      <Stat label="Day P&L" value="+$1,247" change={0.51} icon={<BarChart3 className="h-4 w-4" />} />
+      <Stat label="Total Trades" value={allTrades.length.toString()} icon={<BarChart3 className="h-4 w-4" />} />
       <div className="w-px h-8 bg-border" />
-      <Stat label="Max Drawdown" value="-8.34%" icon={<TrendingDown className="h-4 w-4" />} />
+      <Stat label="Max Drawdown" value={maxDD ? `-${maxDD.toFixed(2)}%` : "—"} icon={<TrendingDown className="h-4 w-4" />} />
       <div className="w-px h-8 bg-border" />
-      <Stat label="Active Strategies" value="3" icon={<Target className="h-4 w-4" />} />
+      <Stat label="Active Strategies" value={activeStrategies.length.toString()} icon={<Target className="h-4 w-4" />} />
     </div>
   );
 }

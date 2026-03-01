@@ -1,4 +1,4 @@
-import { mockStrategies } from "@/lib/mock-data";
+import { useStrategies } from "@/hooks/use-strategies";
 import { calculateMetrics, getMonthlyReturns } from "@/lib/analytics";
 import { MetricsGrid } from "@/components/dashboard/MetricsGrid";
 import { EquityCurve } from "@/components/dashboard/EquityCurve";
@@ -7,12 +7,41 @@ import { TradeDistribution } from "@/components/dashboard/TradeDistribution";
 import { TradesTable } from "@/components/dashboard/TradesTable";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { ArrowRight, Activity } from "lucide-react";
+import { ArrowRight, Activity, Plus } from "lucide-react";
 
 const Index = () => {
-  const allTrades = mockStrategies.flatMap((s) => s.trades);
-  const primaryStrategy = mockStrategies[0];
+  const { data: strategies = [], isLoading } = useStrategies();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (strategies.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold font-mono tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Overview of your quantitative strategies</p>
+        </div>
+        <Card className="bg-card border-border">
+          <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
+            <p className="text-muted-foreground font-mono text-sm">No strategies yet. Upload your first backtest to get started.</p>
+            <Link to="/strategies/upload">
+              <Button className="gap-2"><Plus className="h-4 w-4" /> Upload Strategy</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const primaryStrategy = strategies[0];
   const metrics = calculateMetrics(primaryStrategy.trades, primaryStrategy.equityCurve);
   const monthlyReturns = getMonthlyReturns(primaryStrategy.equityCurve);
 
@@ -31,7 +60,7 @@ const Index = () => {
 
       {/* Strategy cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {mockStrategies.map((s) => {
+        {strategies.map((s) => {
           const m = calculateMetrics(s.trades, s.equityCurve);
           return (
             <Link to={`/strategies/${s.id}`} key={s.id}>

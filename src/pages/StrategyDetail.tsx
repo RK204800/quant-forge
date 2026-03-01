@@ -1,5 +1,5 @@
 import { useParams, Link } from "react-router-dom";
-import { mockStrategies } from "@/lib/mock-data";
+import { useStrategy } from "@/hooks/use-strategies";
 import { calculateMetrics, getMonthlyReturns } from "@/lib/analytics";
 import { MetricsGrid } from "@/components/dashboard/MetricsGrid";
 import { EquityCurve } from "@/components/dashboard/EquityCurve";
@@ -11,7 +11,15 @@ import { ArrowLeft } from "lucide-react";
 
 const StrategyDetail = () => {
   const { id } = useParams();
-  const strategy = mockStrategies.find((s) => s.id === id);
+  const { data: strategy, isLoading } = useStrategy(id);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (!strategy) {
     return (
