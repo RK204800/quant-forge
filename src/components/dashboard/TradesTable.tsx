@@ -56,11 +56,11 @@ export function TradesTable({ trades }: TradesTableProps) {
                   </TableCell>
                   <TableCell className="py-2">{format(new Date(trade.entryTime), "MM/dd HH:mm")}</TableCell>
                   <TableCell className="py-2">{format(new Date(trade.exitTime), "MM/dd HH:mm")}</TableCell>
-                  <TableCell className="py-2 text-right">{trade.entryPrice.toFixed(2)}</TableCell>
-                  <TableCell className="py-2 text-right">{trade.exitPrice.toFixed(2)}</TableCell>
-                  <TableCell className="py-2 text-right">{trade.quantity}</TableCell>
+                  <TableCell className="py-2 text-right">{isFinite(trade.entryPrice) ? trade.entryPrice.toFixed(2) : "N/A"}</TableCell>
+                  <TableCell className="py-2 text-right">{isFinite(trade.exitPrice) ? trade.exitPrice.toFixed(2) : "N/A"}</TableCell>
+                  <TableCell className="py-2 text-right">{isFinite(trade.quantity) ? trade.quantity : "N/A"}</TableCell>
                   <TableCell className={`py-2 text-right font-medium ${trade.pnlNet >= 0 ? "text-profit" : "text-loss"}`}>
-                    {trade.pnlNet >= 0 ? "+" : ""}{trade.pnlNet.toFixed(2)}
+                    {isFinite(trade.pnlNet) ? `${trade.pnlNet >= 0 ? "+" : ""}${trade.pnlNet.toFixed(2)}` : "N/A"}
                   </TableCell>
                 </TableRow>
               ))}

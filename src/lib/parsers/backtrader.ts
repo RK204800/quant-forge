@@ -1,6 +1,7 @@
 import Papa from "papaparse";
 import { Trade, EquityPoint } from "@/types";
 import { ParseResult } from "./index";
+import { safeFloat, normalizeDateTime, findCol } from "./utils";
 
 export function parseBacktraderCSV(content: string, strategyId: string): ParseResult {
   const warnings: string[] = [];
@@ -12,21 +13,35 @@ export function parseBacktraderCSV(content: string, strategyId: string): ParseRe
 
   result.data.forEach((row: any, i: number) => {
     try {
-      const pnl = parseFloat(row.pnl || row.PnL || row.profit || row.Profit || "0");
+      const pnl = safeFloat(findCol(row, "pnl", "PnL", "profit", "Profit", "P&L", "P/L", "net_profit", "Net P&L"));
+      const commission = safeFloat(findCol(row, "commission", "Commission", "comm"));
+
+      const entryDateRaw = String(findCol(row, "entry_date", "EntryDate", "date", "Date", "open_time", "datetime", "DateTime", "entry_time", "EntryTime") ?? "");
+      const exitDateRaw = String(findCol(row, "exit_date", "ExitDate", "close_date", "exit_time", "ExitTime", "close_time") ?? "");
+
+      const entryTime = normalizeDateTime(entryDateRaw);
+      const exitTime = normalizeDateTime(exitDateRaw) || entryTime;
+
+      if (!entryTime) {
+        warnings.push(`Row ${i + 1}: unparseable date "${entryDateRaw}"`);
+        return;
+      }
+
+      const dirRaw = String(findCol(row, "direction", "type", "side", "Direction", "Type", "Side") ?? "long");
       const trade: Trade = {
         id: `bt-${i}`,
         strategyId,
-        entryTime: row.entry_date || row.EntryDate || row.date || new Date().toISOString(),
-        exitTime: row.exit_date || row.ExitDate || row.date || new Date().toISOString(),
-        direction: (row.direction || row.type || "long").toLowerCase().includes("short") ? "short" : "long",
-        entryPrice: parseFloat(row.entry_price || row.EntryPrice || "0"),
-        exitPrice: parseFloat(row.exit_price || row.ExitPrice || "0"),
-        quantity: parseFloat(row.size || row.quantity || row.Quantity || "1"),
+        entryTime,
+        exitTime: exitTime || entryTime,
+        direction: dirRaw.toLowerCase().includes("short") ? "short" : "long",
+        entryPrice: safeFloat(findCol(row, "entry_price", "EntryPrice", "Open", "open_price", "Entry")),
+        exitPrice: safeFloat(findCol(row, "exit_price", "ExitPrice", "Close", "close_price", "Exit")),
+        quantity: safeFloat(findCol(row, "size", "quantity", "Quantity", "qty", "Qty", "contracts", "Contracts", "volume"), 1),
         pnlGross: pnl,
-        pnlNet: pnl - parseFloat(row.commission || "0"),
-        commission: parseFloat(row.commission || "0"),
+        pnlNet: pnl - commission,
+        commission,
         slippage: 0,
-        instrument: row.ticker || row.symbol || row.Instrument || "UNKNOWN",
+        instrument: String(findCol(row, "ticker", "symbol", "Instrument", "Symbol", "Ticker", "instrument") ?? "UNKNOWN"),
       };
       trades.push(trade);
       runningEquity += trade.pnlNet;

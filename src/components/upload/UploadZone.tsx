@@ -45,8 +45,11 @@ export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
       const text = await file.text();
       const result = parseFile(text, file.name, strategyId);
       if (result.trades.length === 0) {
-        setError("No trades found. Check the file format.");
+        setError("No trades found. Check the file format and column headers.");
         return;
+      }
+      if (result.warnings.length > 0) {
+        console.warn("Parse warnings:", result.warnings);
       }
       onParsed(result);
     } catch (e) {

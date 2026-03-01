@@ -1,6 +1,7 @@
 import Papa from "papaparse";
 import { Trade, EquityPoint } from "@/types";
 import { ParseResult } from "./index";
+import { safeFloat, normalizeDateTime } from "./utils";
 
 export function parseNinjaTrader(content: string, strategyId: string): ParseResult {
   const warnings: string[] = [];
@@ -12,19 +13,32 @@ export function parseNinjaTrader(content: string, strategyId: string): ParseResu
 
   result.data.forEach((row: any, i: number) => {
     try {
-      const pnl = parseFloat(row.Profit || row.profit || "0");
+      const pnl = safeFloat(row.Profit || row.profit);
+      const commission = safeFloat(row.Commission);
+
+      const entryDateRaw = row["Entry time"] || row.EntryTime || "";
+      const exitDateRaw = row["Exit time"] || row.ExitTime || "";
+
+      const entryTime = normalizeDateTime(entryDateRaw);
+      const exitTime = normalizeDateTime(exitDateRaw) || entryTime;
+
+      if (!entryTime) {
+        warnings.push(`Row ${i + 1}: unparseable date "${entryDateRaw}"`);
+        return;
+      }
+
       const trade: Trade = {
         id: `nt-${i}`,
         strategyId,
-        entryTime: row["Entry time"] || row.EntryTime || new Date().toISOString(),
-        exitTime: row["Exit time"] || row.ExitTime || new Date().toISOString(),
+        entryTime,
+        exitTime: exitTime || entryTime,
         direction: (row["Market position"] || "long").toLowerCase().includes("short") ? "short" : "long",
-        entryPrice: parseFloat(row["Entry price"] || "0"),
-        exitPrice: parseFloat(row["Exit price"] || "0"),
-        quantity: parseFloat(row.Quantity || "1"),
+        entryPrice: safeFloat(row["Entry price"]),
+        exitPrice: safeFloat(row["Exit price"]),
+        quantity: safeFloat(row.Quantity, 1),
         pnlGross: pnl,
-        pnlNet: pnl - parseFloat(row.Commission || "0"),
-        commission: parseFloat(row.Commission || "0"),
+        pnlNet: pnl - commission,
+        commission,
         slippage: 0,
         instrument: row.Instrument || "UNKNOWN",
       };

@@ -1,5 +1,6 @@
 import { Trade, EquityPoint } from "@/types";
 import { ParseResult } from "./index";
+import { safeFloat, normalizeDateTime } from "./utils";
 
 export function parseQuantConnect(content: string, strategyId: string): ParseResult {
   const warnings: string[] = [];
@@ -14,16 +15,27 @@ export function parseQuantConnect(content: string, strategyId: string): ParseRes
 
     Object.values(orders).forEach((order: any, i: number) => {
       if (order.Status !== "Filled" && order.Status !== 3) return;
-      const pnl = parseFloat(order.Price || "0") * parseFloat(order.Quantity || "0") * 0.001; // simplified
+      const price = safeFloat(order.Price);
+      const qty = Math.abs(safeFloat(order.Quantity));
+      const pnl = price * qty * 0.001; // simplified
+
+      const entryTime = normalizeDateTime(order.CreatedTime || order.Time || "");
+      const exitTime = normalizeDateTime(order.LastFillTime || order.Time || "") || entryTime;
+
+      if (!entryTime) {
+        warnings.push(`Order ${i + 1}: unparseable date`);
+        return;
+      }
+
       const trade: Trade = {
         id: `qc-${i}`,
         strategyId,
-        entryTime: order.CreatedTime || order.Time || new Date().toISOString(),
-        exitTime: order.LastFillTime || order.Time || new Date().toISOString(),
+        entryTime,
+        exitTime: exitTime || entryTime,
         direction: (order.Direction || "buy").toLowerCase().includes("sell") ? "short" : "long",
-        entryPrice: parseFloat(order.Price || "0"),
-        exitPrice: parseFloat(order.Price || "0"),
-        quantity: Math.abs(parseFloat(order.Quantity || "0")),
+        entryPrice: price,
+        exitPrice: price,
+        quantity: qty,
         pnlGross: pnl,
         pnlNet: pnl,
         commission: 0,

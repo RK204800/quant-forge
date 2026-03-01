@@ -30,7 +30,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export function EquityCurve({ data, title = "Equity Curve" }: EquityCurveProps) {
-  const chartData = data.map((d) => ({
+  const validData = data.filter((d) => isFinite(d.equity) && d.equity > 0);
+  const chartData = validData.map((d) => ({
     date: format(new Date(d.timestamp), "MMM dd"),
     equity: safeNum(d.equity),
     drawdown: safeNum(-(d.drawdown * 100)),
