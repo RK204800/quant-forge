@@ -171,4 +171,23 @@ export interface JournalEntry {
   createdAt: string;
 }
 
-export type FileFormat = "backtrader" | "ninjatrader" | "quantconnect" | "tradingview" | "generic";
+export type FileFormat = "backtrader" | "ninjatrader" | "quantconnect" | "tradingview" | "generic" | "mapped";
+
+export type TradeField =
+  | "entryTime"
+  | "exitTime"
+  | "direction"
+  | "entryPrice"
+  | "exitPrice"
+  | "pnl"
+  | "quantity"
+  | "instrument"
+  | "commission"
+  | "mae"
+  | "mfe"
+  | "tradeNumber"
+  | "skip";
+
+export interface ColumnMapping {
+  [csvHeader: string]: TradeField;
+}

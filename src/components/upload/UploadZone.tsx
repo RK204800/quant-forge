@@ -1,10 +1,11 @@
 import { useCallback, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Upload, FileText, AlertCircle, Download } from "lucide-react";
+import { Upload, AlertCircle, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { parseFile } from "@/lib/parsers";
+import { parseFile, extractHeaders } from "@/lib/parsers";
 import { ParseResult } from "@/lib/parsers";
 import { xlsxToCSV, isExcelFile } from "@/lib/parsers/xlsx-reader";
+import { ColumnMapper } from "./ColumnMapper";
 
 const SAMPLE_CSV = `ticker,entry_date,exit_date,direction,entry_price,exit_price,size,pnl,commission
 SPY,2025-01-02T10:00:00,2025-01-02T15:30:00,long,475.50,478.20,100,270,4.50
@@ -34,6 +35,13 @@ export interface ParsedFile {
   fileName: string;
 }
 
+interface UnmappedFile {
+  rawContent: string;
+  fileName: string;
+  headers: string[];
+  sampleRows: Record<string, string>[];
+}
+
 interface UploadZoneProps {
   strategyId: string;
   onParsed: (files: ParsedFile[]) => void;
@@ -42,12 +50,15 @@ interface UploadZoneProps {
 export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unmappedFile, setUnmappedFile] = useState<UnmappedFile | null>(null);
 
   const handleFiles = useCallback(async (fileList: FileList) => {
     setError(null);
+    setUnmappedFile(null);
     const files = Array.from(fileList);
     const results: ParsedFile[] = [];
     const errors: string[] = [];
+    const unmapped: UnmappedFile[] = [];
 
     await Promise.all(
       files.map(async (file) => {
@@ -61,6 +72,14 @@ export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
           }
           const result = parseFile(text, file.name, strategyId);
           if (result.trades.length === 0) {
+            // Try to offer column mapping for CSV files
+            if (!file.name.endsWith(".json")) {
+              const { headers, sampleRows } = extractHeaders(text);
+              if (headers.length > 0) {
+                unmapped.push({ rawContent: text, fileName: file.name, headers, sampleRows });
+                return;
+              }
+            }
             const detail = result.warnings.length > 0
               ? ` (${result.format} format — ${result.warnings.slice(0, 2).join("; ")})`
               : ` (detected as ${result.format})`;
@@ -77,6 +96,13 @@ export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
     if (results.length > 0) {
       onParsed(results);
     }
+    // Show mapper for first unmapped file (handle one at a time)
+    if (unmapped.length > 0) {
+      setUnmappedFile(unmapped[0]);
+      if (unmapped.length > 1) {
+        errors.push(`${unmapped.length - 1} other file(s) also need manual mapping — map one at a time`);
+      }
+    }
     if (errors.length > 0) {
       setError(errors.join("; "));
     }
@@ -88,56 +114,77 @@ export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
     if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
   }, [handleFiles]);
 
+  const handleMapped = useCallback((result: ParseResult) => {
+    if (unmappedFile) {
+      onParsed([{ result, fileName: unmappedFile.fileName }]);
+      setUnmappedFile(null);
+    }
+  }, [unmappedFile, onParsed]);
+
   return (
-    <Card className={`bg-card border-2 border-dashed transition-colors cursor-pointer ${dragOver ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground"}`}>
-      <CardContent
-        className="flex flex-col items-center justify-center py-12 gap-4"
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
-        onClick={() => {
-          const input = document.createElement("input");
-          input.type = "file";
-          input.accept = ".csv,.json,.txt,.xlsx,.xls";
-          input.multiple = true;
-          input.onchange = (e) => {
-            const files = (e.target as HTMLInputElement).files;
-            if (files && files.length > 0) handleFiles(files);
-          };
-          input.click();
-        }}
-      >
-        <Upload className={`h-10 w-10 ${dragOver ? "text-primary" : "text-muted-foreground"}`} />
-        <div className="text-center">
-          <p className="text-sm font-medium text-foreground">Drop backtest files here or click to browse</p>
-          <p className="text-xs text-muted-foreground mt-1">Supports multiple files · Backtrader, NinjaTrader, QuantConnect, TradingView, Generic CSV</p>
-          <div className="flex gap-2 mt-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1 text-xs text-muted-foreground hover:text-foreground"
-              onClick={(e) => { e.stopPropagation(); downloadSample(SAMPLE_CSV, "sample_backtest.csv"); }}
-            >
-              <Download className="h-3 w-3" /> Generic CSV
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1 text-xs text-muted-foreground hover:text-foreground"
-              onClick={(e) => { e.stopPropagation(); downloadSample(SAMPLE_TV_CSV, "sample_tradingview.csv"); }}
-            >
-              <Download className="h-3 w-3" /> TradingView CSV
-            </Button>
+    <div className="space-y-4">
+      <Card className={`bg-card border-2 border-dashed transition-colors cursor-pointer ${dragOver ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground"}`}>
+        <CardContent
+          className="flex flex-col items-center justify-center py-12 gap-4"
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = ".csv,.json,.txt,.xlsx,.xls";
+            input.multiple = true;
+            input.onchange = (e) => {
+              const files = (e.target as HTMLInputElement).files;
+              if (files && files.length > 0) handleFiles(files);
+            };
+            input.click();
+          }}
+        >
+          <Upload className={`h-10 w-10 ${dragOver ? "text-primary" : "text-muted-foreground"}`} />
+          <div className="text-center">
+            <p className="text-sm font-medium text-foreground">Drop backtest files here or click to browse</p>
+            <p className="text-xs text-muted-foreground mt-1">Supports multiple files · Backtrader, NinjaTrader, QuantConnect, TradingView, Generic CSV</p>
+            <div className="flex gap-2 mt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-1 text-xs text-muted-foreground hover:text-foreground"
+                onClick={(e) => { e.stopPropagation(); downloadSample(SAMPLE_CSV, "sample_backtest.csv"); }}
+              >
+                <Download className="h-3 w-3" /> Generic CSV
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-1 text-xs text-muted-foreground hover:text-foreground"
+                onClick={(e) => { e.stopPropagation(); downloadSample(SAMPLE_TV_CSV, "sample_tradingview.csv"); }}
+              >
+                <Download className="h-3 w-3" /> TradingView CSV
+              </Button>
+            </div>
           </div>
-        </div>
-        {error && (
-          <div className="flex items-center gap-2 text-xs text-loss">
-            <AlertCircle className="h-3 w-3" /> {error}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          {error && (
+            <div className="flex items-center gap-2 text-xs text-loss">
+              <AlertCircle className="h-3 w-3" /> {error}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {unmappedFile && (
+        <ColumnMapper
+          headers={unmappedFile.headers}
+          sampleRows={unmappedFile.sampleRows}
+          rawContent={unmappedFile.rawContent}
+          fileName={unmappedFile.fileName}
+          strategyId={strategyId}
+          onMapped={handleMapped}
+          onCancel={() => setUnmappedFile(null)}
+        />
+      )}
+    </div>
   );
 }
