@@ -36,7 +36,7 @@ export function MetricsGrid({ metrics }: MetricsGridProps) {
       <MetricCard label="Sharpe Ratio" value={metrics.sharpeRatio.toFixed(2)} icon={<Activity className="h-4 w-4" />} color={metrics.sharpeRatio >= 1 ? "text-profit" : metrics.sharpeRatio >= 0 ? "text-warning" : "text-loss"} />
       <MetricCard label="Sortino Ratio" value={metrics.sortinoRatio.toFixed(2)} icon={<Activity className="h-4 w-4" />} color={metrics.sortinoRatio >= 1.5 ? "text-profit" : "text-warning"} />
       <MetricCard label="Calmar Ratio" value={metrics.calmarRatio.toFixed(2)} icon={<BarChart3 className="h-4 w-4" />} />
-      <MetricCard label="Max Drawdown" value={`-${metrics.maxDrawdown.toFixed(2)}%`} icon={<TrendingDown className="h-4 w-4" />} color="text-loss" />
+      <MetricCard label="Max Drawdown" value={`$${Math.abs(metrics.maxDrawdown).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} icon={<TrendingDown className="h-4 w-4" />} color="text-loss" />
       <MetricCard label="Win Rate" value={`${metrics.winRate.toFixed(1)}%`} icon={<Target className="h-4 w-4" />} color={metrics.winRate >= 50 ? "text-profit" : "text-loss"} />
       <MetricCard label="Profit Factor" value={metrics.profitFactor === Infinity ? "∞" : metrics.profitFactor.toFixed(2)} icon={<Percent className="h-4 w-4" />} color={metrics.profitFactor >= 1.5 ? "text-profit" : "text-warning"} />
       <MetricCard label="Expectancy" value={`$${metrics.expectancy.toFixed(2)}`} icon={<Zap className="h-4 w-4" />} color={metrics.expectancy >= 0 ? "text-profit" : "text-loss"} />
