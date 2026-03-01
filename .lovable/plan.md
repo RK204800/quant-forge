@@ -1,71 +1,177 @@
 
 
-# Multi-File Strategy Upload
+# JetQuant Major Feature Release
 
-## What Changes
+## Overview
 
-Transform the upload page from a single-file, single-strategy flow into a batch upload experience where you can drop multiple CSV files at once -- each file becomes its own strategy.
+Six major enhancements transforming QuantForge into JetQuant with professional-grade strategy management, trade visualization, and filtering capabilities.
 
-## How It Works
+---
 
-1. **Drop zone accepts multiple files** -- drag 5 CSVs at once, or click to multi-select
-2. Each file is parsed independently and shown as a row in a queue
-3. Each row has: file name, auto-detected format, trade count, a name input field, status indicator, and a remove button
-4. File names are used as default strategy names (without extension), editable inline
-5. A single "Save All" button saves all strategies sequentially
-6. As each saves, its row shows a checkmark; on error, it shows the error inline
-7. After all save, navigate to the strategies list page
+## 1. Rebrand: QuantForge to JetQuant
 
-## Files to Change
+**Files to change:**
+- `src/components/layout/AppSidebar.tsx` -- sidebar logo text
+- `src/pages/Auth.tsx` -- login page branding, placeholder email
+- `src/pages/ResetPassword.tsx` -- reset page branding
+- `src/App.tsx` -- loading spinner text
+- `index.html` -- page title and meta tags
 
-### `src/components/upload/UploadZone.tsx`
-- Change `onParsed` callback to `onParsed: (results: ParseResult[]) => void` (array)
-- Add `multiple` attribute to the file input
-- Handle `e.dataTransfer.files` as a full `FileList` (loop all files, not just `[0]`)
-- Parse each file independently, collecting results
-- Show file count indicator instead of single file name
-- Keep drag-and-drop styling and sample download buttons as-is
+Simple find-and-replace of "QuantForge" with "JetQuant" across all references.
 
-### `src/pages/UploadStrategy.tsx`
-- Replace single `result` / `name` state with an array of `{ result: ParseResult, name: string, status: 'pending' | 'saving' | 'saved' | 'error', error?: string }` items
-- On parse callback, append new items to the queue (don't replace -- allows adding more files)
-- Render a queue list: each item shows file format badge, trade count, inline name input, remove button
-- Expandable preview: clicking a row shows its MetricsGrid and EquityCurve below
-- "Save All" button iterates through pending items, calling `useSaveStrategy` for each
-- Progress indicator shows "Saving 2/5..." during batch save
-- After all saved, navigate to `/strategies`
-- Keep the single-file flow working too (uploading one file is just a queue of one)
+---
 
-## UI Layout
+## 2. Inline Strategy Rename
 
-```text
-+--------------------------------------------------+
-| Upload Strategies                                 |
-| Import backtest results from your trading platform|
-+--------------------------------------------------+
-| [  Drop files here or click to browse  ]          |
-|    Supports multiple files at once                |
-+--------------------------------------------------+
-| Queue (3 files)                              [Save All] |
-| +-------------------------------------------------+
-| | momentum_v2.csv  | TradingView | 142 trades    |
-| | [Momentum v2___________] | [x]                  |
-| +-------------------------------------------------+
-| | mean_revert.csv  | Backtrader  | 87 trades     |
-| | [Mean Revert___________] | [x]                  |
-| +-------------------------------------------------+
-| | scalper.csv      | Generic     | 310 trades    |
-| | [Scalper_______________] | [x]                  |
-| +-------------------------------------------------+
+**Files to change:**
+- `src/pages/Strategies.tsx` -- add pencil icon button on each card
+- `src/hooks/use-strategies.ts` -- add `useUpdateStrategy` mutation
+
+Clicking the pencil icon opens a small inline input (or popover) over the strategy name. On blur or Enter, it saves via `supabase.from("strategies").update({ name }).eq("id", id)`. No re-upload needed.
+
+---
+
+## 3. Strategy Classes with Grouping
+
+**Database migration:**
+```sql
+ALTER TABLE public.strategies ADD COLUMN IF NOT EXISTS strategy_class TEXT;
 ```
 
-Clicking a row expands to show a preview of MetricsGrid + EquityCurve for that strategy.
+**Files to change:**
+- `src/types/index.ts` -- add `strategyClass` to Strategy interface
+- `src/hooks/use-strategies.ts` -- map `strategy_class` field in DB mappers and save mutation
+- `src/pages/Strategies.tsx` -- add class badge on cards, group cards by class with section headers
+- `src/pages/UploadStrategy.tsx` -- add optional strategy class dropdown in queue items
+- `src/pages/StrategyDetail.tsx` -- show class badge in header
 
-## Technical Details
+Predefined class options: "RSI Strategy", "Breakout", "Mean Reversion", "ML Model", "A/D Strategy", "Momentum", "Scalping", "Custom" (with free text).
 
-- No database changes needed -- reuses `useSaveStrategy` mutation for each item
-- Parsing is done client-side and is fast; files are processed in parallel using `Promise.all`
-- Save is sequential to avoid overwhelming the database with concurrent batch inserts
-- File input gets `multiple` attribute and `accept=".csv,.json,.txt"`
-- Drag-and-drop processes all files from `e.dataTransfer.files` via loop
+---
+
+## 4. Trade Chart with lightweight-charts
+
+**New dependency:** `lightweight-charts`
+
+**Database/Backend:**
+- Store Polygon.io API key as a secret (`POLYGON_API_KEY`)
+- New edge function `supabase/functions/market-data/index.ts` that proxies requests to Polygon.io's `/v2/aggs/ticker/{ticker}/range/1/minute/{from}/{to}` endpoint
+
+**New files:**
+- `src/components/dashboard/TradeChart.tsx` -- lightweight-charts candlestick chart with trade markers
+
+**Modified files:**
+- `src/pages/StrategyDetail.tsx` -- add "Trade Chart" as 6th tab
+
+**How it works:**
+1. When the Trade Chart tab is opened, it reads the strategy's trades to determine the instrument and date range
+2. Calls the edge function to fetch 1-min candle data from Polygon.io
+3. Renders candlestick chart with `lightweight-charts`
+4. Overlays markers: green up arrows at long entries, red down arrows at short entries, X markers at exits
+5. Chart supports zoom, pan, and crosshair by default (built into lightweight-charts)
+
+**Instrument mapping:** The edge function maps common instrument names (ES, NQ, etc.) to Polygon ticker symbols (e.g., ES -> ESM2024 or a futures symbol). We'll include a simple mapping table and fallback to the raw instrument name.
+
+---
+
+## 5. Strategy Parameters
+
+**Database migration:**
+```sql
+ALTER TABLE public.strategies ADD COLUMN IF NOT EXISTS parameters JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.strategies ADD COLUMN IF NOT EXISTS parameter_template JSONB DEFAULT '{}'::jsonb;
+```
+
+**Files to change:**
+- `src/types/index.ts` -- add `parameters` and `parameterTemplate` fields
+- `src/hooks/use-strategies.ts` -- map new fields in DB mappers and save mutation
+- `src/lib/parsers/ninjatrader.ts` -- detect and parse XML parameter templates (if content contains `<Parameter>` elements)
+- `src/lib/parsers/index.ts` -- extend `ParseResult` with optional `parameters` field
+
+**New files:**
+- `src/components/dashboard/ParametersTable.tsx` -- clean table displaying parameter key-value pairs
+- `src/components/dashboard/ParameterCompare.tsx` -- side-by-side comparison view for strategies in the same class, highlighting differences
+
+**Modified files:**
+- `src/pages/StrategyDetail.tsx` -- add Parameters section (either in Overview tab or as its own sub-section)
+- `src/pages/Strategies.tsx` -- add "Compare" button when 2+ strategies share a class
+
+---
+
+## 6. Filing System: Favorites, Tags, Filters, Sorting
+
+**Database migration:**
+```sql
+ALTER TABLE public.strategies ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS public.strategy_tags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  name TEXT NOT NULL,
+  color TEXT DEFAULT '#666666',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.strategy_tags ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view own tags" ON public.strategy_tags FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own tags" ON public.strategy_tags FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own tags" ON public.strategy_tags FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own tags" ON public.strategy_tags FOR DELETE USING (auth.uid() = user_id);
+
+CREATE TABLE IF NOT EXISTS public.strategy_tag_mapping (
+  strategy_id UUID REFERENCES public.strategies(id) ON DELETE CASCADE,
+  tag_id UUID REFERENCES public.strategy_tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (strategy_id, tag_id)
+);
+ALTER TABLE public.strategy_tag_mapping ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view own tag mappings" ON public.strategy_tag_mapping FOR SELECT
+  USING (EXISTS (SELECT 1 FROM public.strategies WHERE id = strategy_id AND user_id = auth.uid()));
+CREATE POLICY "Users can insert own tag mappings" ON public.strategy_tag_mapping FOR INSERT
+  WITH CHECK (EXISTS (SELECT 1 FROM public.strategies WHERE id = strategy_id AND user_id = auth.uid()));
+CREATE POLICY "Users can delete own tag mappings" ON public.strategy_tag_mapping FOR DELETE
+  USING (EXISTS (SELECT 1 FROM public.strategies WHERE id = strategy_id AND user_id = auth.uid()));
+```
+
+**Files to change:**
+- `src/types/index.ts` -- add `isFavorite`, `strategyClass`, `tags` to Strategy; add `StrategyTag` type
+- `src/hooks/use-strategies.ts` -- map new fields; add `useToggleFavorite`, `useTags`, `useAddTag`, `useRemoveTag` hooks
+
+**New files:**
+- `src/components/strategies/FilterSidebar.tsx` -- collapsible filter panel with checkboxes for Strategy Class, Timeframe, Engine, Asset Class, Status, Tags, Favorites
+- `src/components/strategies/SortDropdown.tsx` -- sort by Profit Factor (default), Total Return, Sharpe, Sortino, Win Rate, Max Drawdown, Date Added
+- `src/components/strategies/TagManager.tsx` -- create/edit/delete tags with color picker
+- `src/components/strategies/TagBadges.tsx` -- display and assign tags on strategy cards
+
+**Modified files:**
+- `src/pages/Strategies.tsx` -- major rebuild:
+  - Sidebar layout with FilterSidebar on the left
+  - Sort dropdown in the header
+  - Quick filter buttons: "Best performers" (top 10 by PF), "Favorites only", "Recently added"
+  - Favorite toggle (heart/star icon) on each card
+  - Tag badges on each card
+  - Default sort: Profit Factor descending
+  - Client-side filtering and sorting (all data already loaded)
+
+---
+
+## Implementation Sequence
+
+1. Database migration (all schema changes in one migration)
+2. Rebrand to JetQuant (quick text changes)
+3. Type updates and hook changes (foundation for everything)
+4. Inline rename (small, self-contained)
+5. Strategy classes with grouping
+6. Filing system (favorites, tags, filters, sorting)
+7. Parameters parsing and display
+8. Trade Chart with lightweight-charts + edge function + Polygon.io API key setup
+
+---
+
+## Technical Notes
+
+- All new tables get RLS policies tied to `auth.uid() = user_id`
+- The `strategy_tag_mapping` junction table uses strategy ownership for RLS (no `user_id` column on junction table itself)
+- Filtering and sorting happen client-side since all strategies are already fetched
+- The Polygon.io edge function caches responses to avoid repeated API calls for the same instrument/date range
+- `lightweight-charts` is TradingView's open-source charting library -- perfect fit for trading terminal aesthetic
+- Parameters are stored as JSONB for flexibility across different backtest engines
 
