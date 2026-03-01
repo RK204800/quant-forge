@@ -43,6 +43,7 @@ export interface Strategy {
   parameters?: Record<string, any>;
   parameterTemplate?: Record<string, any>;
   isFavorite?: boolean;
+  showOnDashboard?: boolean;
   tags?: StrategyTag[];
 }
 
