@@ -1,89 +1,66 @@
 
 
-# Flexible CSV Column Mapping System
+## Two Features: Manual Re-mapping Button + Portfolio Add/Remove
 
-## Problem
-The parser only recognizes specific pre-mapped column names. When a CSV uses unfamiliar headers, it fails silently with "No trades found" and the user has no recourse. Different platforms export different column layouts, and we can't predict them all.
+### 1. Manual Column Mapping Trigger
 
-## Solution
-Add a **manual column mapping UI** that activates automatically when auto-detection fails. The user sees their CSV's actual column headers and maps them to trade fields using dropdowns. Not all fields are required -- unmapped fields default to null/zero.
+Currently the column mapper only appears when auto-detection fails (0 trades). You need a way to force it open when auto-detection produces incorrect results.
 
-## User Flow
+**Changes:**
 
-```text
-Upload CSV
-    |
-    v
-Auto-detect format
-    |
-    +---> Trades found --> Queue (existing flow)
-    |
-    +---> 0 trades found --> Show Column Mapper
-                                |
-                                v
-                            Display CSV headers as rows
-                            Each row has a dropdown: Entry Date, Exit Date,
-                            Direction, Entry Price, Exit Price, PnL, Quantity,
-                            Instrument, Commission, MAE, MFE, (skip)
-                                |
-                                v
-                            User maps columns, clicks "Apply"
-                                |
-                                v
-                            Parse with user mapping --> Queue
+**`src/components/upload/UploadZone.tsx`**
+- Add a "Manual Map" button that appears after a file has been successfully parsed and added to the queue
+- Add a new prop/callback or internal state so users can click "Re-map columns" on any queued file
+- Alternatively, add a persistent "Map columns manually" link next to the upload zone that lets users re-upload a file and go straight to the mapper
+
+**`src/pages/UploadStrategy.tsx`**
+- Add a "Re-map" button on each queue item card (next to the remove X button)
+- When clicked, it stores that item's raw content/headers and opens the ColumnMapper for it
+- On successful re-mapping, replace that queue item's `ParseResult` with the new one
+- This requires storing the raw file content alongside each queue item
+
+**Implementation detail:**
+- Extend `QueueItem` to include `rawContent?: string` and `headers?: string[]` and `sampleRows?: Record<string, string>[]`
+- When files are parsed (both auto and manual), store the raw content so re-mapping is always available
+- Add a `ColumnMapper` render in `UploadStrategy.tsx` that targets a specific queue item for re-mapping
+
+### 2. Portfolio Builder: Add/Remove Strategies
+
+Currently the Portfolio page only accepts strategies via URL params set from the Strategies page. You can't add or remove strategies once you're on the page.
+
+**Changes:**
+
+**`src/pages/Portfolio.tsx`**
+- Add local state `selectedIds` initialized from URL params, replacing the read-only `idsParam` approach
+- Add an "Add Strategy" button that opens a dropdown/dialog listing all available strategies not yet in the portfolio
+- Add an "X" remove button on each strategy card to remove it from the portfolio
+- When strategies change, update the URL search params to keep it shareable
+- Show the empty state with an "Add Strategies" button when no strategies are selected
+
+**Specific UI additions:**
+- Each strategy card gets a small X (remove) button in the card header
+- An "Add Strategy" button below the strategy cards grid opens a popover listing available strategies with checkboxes
+- Removing a strategy also cleans up its weight from state
+
+### Technical Details
+
+**QueueItem extension (UploadStrategy.tsx):**
+```
+interface QueueItem {
+  // ...existing fields
+  rawContent?: string;
+  headers?: string[];
+  sampleRows?: Record<string, string>[];
+}
 ```
 
-## Trade Fields and Defaults
+**Portfolio state management:**
+- Replace `useMemo` filter with `useState<string[]>` initialized from URL params
+- Use `useSearchParams` setter to sync URL when selections change
+- Filter `allStrategies` against `selectedIds` for display
 
-| Field | Required? | Default if unmapped |
-|-------|-----------|-------------------|
-| Entry Date/Time | Yes (minimum) | -- |
-| Exit Date/Time | No | Same as entry |
-| Direction | No | "long" |
-| Entry Price | No | 0 |
-| Exit Price | No | 0 |
-| PnL / Profit | No | Computed from prices, or 0 |
-| Quantity | No | 1 |
-| Instrument | No | "UNKNOWN" |
-| Commission | No | 0 |
-| MAE | No | null |
-| MFE | No | null |
-| Trade # (grouping) | No | Each row = 1 trade |
-
-If Trade # is mapped, rows are grouped (like TradingView paired entry/exit rows). Otherwise each row is treated as one complete trade.
-
-## Files to Create/Modify
-
-### New: `src/components/upload/ColumnMapper.tsx`
-- Receives: CSV headers (string[]), sample rows (first 3 rows for preview), raw content, fileName
-- Shows a table: left column = CSV header name + sample values, right column = dropdown to select trade field
-- "Apply Mapping" button, disabled until at least Entry Date is mapped
-- Calls `parseWithMapping()` and returns `ParseResult`
-
-### New: `src/lib/parsers/mapped.ts`
-- `parseWithMapping(content, strategyId, mapping)` function
-- Takes a `Record<string, TradeField>` mapping (CSV header -> trade field enum)
-- Handles both flat (one row per trade) and grouped (Trade # mapped) modes
-- Applies same `safeFloat`, `normalizeDateTime`, `computePnl` utilities
-- Returns standard `ParseResult`
-
-### Modify: `src/types/index.ts`
-- Add `TradeField` type: `"entryTime" | "exitTime" | "direction" | "entryPrice" | "exitPrice" | "pnl" | "quantity" | "instrument" | "commission" | "mae" | "mfe" | "tradeNumber" | "skip"`
-- Add `ColumnMapping` interface: `{ csvHeader: string; tradeField: TradeField }`
-
-### Modify: `src/components/upload/UploadZone.tsx`
-- When `parseFile` returns 0 trades, instead of immediately setting an error, store the failed file's raw content, headers, and sample rows in state
-- Render `ColumnMapper` inline below the drop zone
-- On successful manual mapping, pass the result back through `onParsed`
-
-### Modify: `src/lib/parsers/index.ts`
-- Export a `extractHeaders(content)` utility that returns `{ headers: string[], sampleRows: Record<string, string>[] }` for the mapper UI to display
-
-## Design Details
-
-- The mapper UI uses the existing Card/Select components for consistency
-- Sample values shown as muted text under each header so users can see what data is in each column
-- A "skip" option in each dropdown for columns the user doesn't need
-- If only PnL or only prices are mapped, the system handles both cases (direct PnL vs computed)
-- Columns not mapped to anything are silently ignored
+**Files to modify:**
+- `src/pages/UploadStrategy.tsx` -- add re-map button per queue item, store raw content, render ColumnMapper for re-mapping
+- `src/components/upload/UploadZone.tsx` -- pass raw content through to parent via `ParsedFile`
+- `src/pages/Portfolio.tsx` -- add/remove strategy UI with local state and URL sync
 
