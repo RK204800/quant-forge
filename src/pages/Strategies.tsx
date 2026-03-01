@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useStrategies, useUpdateStrategy, useToggleFavorite, useTags, useRecomputeAllEquity } from "@/hooks/use-strategies";
+import { useStrategies, useUpdateStrategy, useToggleFavorite, useToggleDashboard, useTags, useRecomputeAllEquity } from "@/hooks/use-strategies";
 import { calculateMetrics } from "@/lib/analytics";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, ArrowUpRight, Pencil, Star, Check, X, GitCompareArrows, RefreshCw } from "lucide-react";
+import { Plus, ArrowUpRight, Pencil, Star, Check, X, GitCompareArrows, RefreshCw, LayoutDashboard, Briefcase } from "lucide-react";
 import { FilterSidebar, FilterState } from "@/components/strategies/FilterSidebar";
 import { SortDropdown, SortField } from "@/components/strategies/SortDropdown";
 import { TagManagerDialog, TagAssigner } from "@/components/strategies/TagManager";
 import { Strategy, StrategyTag } from "@/types";
 import { StrategyMetrics } from "@/types";
+import { toast } from "sonner";
 
 const STRATEGY_CLASSES = ["RSI Strategy", "Breakout", "Mean Reversion", "ML Model", "A/D Strategy", "Momentum", "Scalping", "Custom"];
 
@@ -158,6 +159,21 @@ const Strategies = () => {
               </Button>
             )}
             <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={compareIds.length === 0}
+              onClick={() => {
+                compareIds.forEach((id) => {
+                  updateStrategy.mutate({ id, showOnDashboard: true });
+                });
+                toast.success(`${compareIds.length} strategies added to dashboard`);
+              }}
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              Add to Dashboard
+            </Button>
+            <Button
               variant={compareIds.length >= 2 ? "default" : "outline"}
               size="sm"
               className="gap-2"
@@ -171,6 +187,16 @@ const Strategies = () => {
             >
               <GitCompareArrows className="h-4 w-4" />
               {compareIds.length >= 2 ? `Compare (${compareIds.length})` : "Compare"}
+            </Button>
+            <Button
+              size="sm"
+              className={`gap-2 ${compareIds.length >= 2 ? "bg-green-600 hover:bg-green-700 text-white" : ""}`}
+              variant={compareIds.length >= 2 ? "default" : "outline"}
+              disabled={compareIds.length < 2}
+              onClick={() => navigate(`/portfolio?ids=${compareIds.join(",")}`)}
+            >
+              <Briefcase className="h-4 w-4" />
+              Create Portfolio
             </Button>
             <Link to="/strategies/upload">
               <Button size="sm" className="gap-2"><Plus className="h-4 w-4" /> Upload</Button>
