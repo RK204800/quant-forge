@@ -21,6 +21,7 @@ export function parseTradingView(content: string, strategyId: string): ParseResu
 
   const trades: Trade[] = [];
   let runningEquity = 100000;
+  let peak = runningEquity;
   const equityCurve: EquityPoint[] = [];
 
   Object.entries(tradeGroups).forEach(([tradeNum, rows], idx) => {
@@ -63,11 +64,11 @@ export function parseTradingView(content: string, strategyId: string): ParseResu
 
       trades.push(trade);
       runningEquity += trade.pnlNet;
-      const peak = Math.max(runningEquity, ...equityCurve.map((e) => e.equity), runningEquity);
+      if (runningEquity > peak) peak = runningEquity;
       equityCurve.push({
         timestamp: trade.exitTime,
         equity: runningEquity,
-        drawdown: (peak - runningEquity) / peak,
+        drawdown: peak > 0 ? (peak - runningEquity) / peak : 0,
       });
     } catch {
       warnings.push(`Trade #${tradeNum}: parse error`);

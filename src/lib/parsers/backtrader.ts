@@ -7,6 +7,7 @@ export function parseBacktraderCSV(content: string, strategyId: string): ParseRe
   const result = Papa.parse(content, { header: true, skipEmptyLines: true });
   const trades: Trade[] = [];
   let runningEquity = 100000;
+  let peak = runningEquity;
   const equityCurve: EquityPoint[] = [];
 
   result.data.forEach((row: any, i: number) => {
@@ -29,11 +30,11 @@ export function parseBacktraderCSV(content: string, strategyId: string): ParseRe
       };
       trades.push(trade);
       runningEquity += trade.pnlNet;
-      const peak = Math.max(runningEquity, ...equityCurve.map((e) => e.equity), runningEquity);
+      if (runningEquity > peak) peak = runningEquity;
       equityCurve.push({
         timestamp: trade.exitTime,
         equity: runningEquity,
-        drawdown: (peak - runningEquity) / peak,
+        drawdown: peak > 0 ? (peak - runningEquity) / peak : 0,
       });
     } catch {
       warnings.push(`Row ${i + 1}: parse error`);

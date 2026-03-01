@@ -7,6 +7,7 @@ export function parseNinjaTrader(content: string, strategyId: string): ParseResu
   const result = Papa.parse(content, { header: true, skipEmptyLines: true });
   const trades: Trade[] = [];
   let runningEquity = 100000;
+  let peak = runningEquity;
   const equityCurve: EquityPoint[] = [];
 
   result.data.forEach((row: any, i: number) => {
@@ -29,8 +30,8 @@ export function parseNinjaTrader(content: string, strategyId: string): ParseResu
       };
       trades.push(trade);
       runningEquity += trade.pnlNet;
-      const peak = Math.max(runningEquity, ...equityCurve.map((e) => e.equity), runningEquity);
-      equityCurve.push({ timestamp: trade.exitTime, equity: runningEquity, drawdown: (peak - runningEquity) / peak });
+      if (runningEquity > peak) peak = runningEquity;
+      equityCurve.push({ timestamp: trade.exitTime, equity: runningEquity, drawdown: peak > 0 ? (peak - runningEquity) / peak : 0 });
     } catch {
       warnings.push(`Row ${i + 1}: parse error`);
     }
