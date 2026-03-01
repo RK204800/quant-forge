@@ -289,6 +289,78 @@ export function useToggleFavorite() {
   };
 }
 
+export function useRecomputeEquity() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (strategyId: string) => {
+      if (!user) throw new Error("Not authenticated");
+
+      // Fetch trades for this strategy
+      const { data: trades, error: tErr } = await supabase
+        .from("trades")
+        .select("*")
+        .eq("strategy_id", strategyId)
+        .order("exit_time");
+      if (tErr) throw tErr;
+      if (!trades?.length) throw new Error("No trades found for this strategy");
+
+      // Delete existing equity curve
+      const { error: dErr } = await supabase
+        .from("equity_curves")
+        .delete()
+        .eq("strategy_id", strategyId);
+      if (dErr) throw dErr;
+
+      // Recompute from $0 cumulative PnL
+      let runningEquity = 0;
+      let peak = 0;
+      const equityRows = [
+        {
+          strategy_id: strategyId,
+          user_id: user.id,
+          timestamp: trades[0].exit_time,
+          equity: 0,
+          drawdown: 0,
+          benchmark_return: null,
+        },
+      ];
+
+      for (const t of trades) {
+        runningEquity += Number(t.pnl_net);
+        if (runningEquity > peak) peak = runningEquity;
+        const dd = peak > 0 ? +((peak - runningEquity) / peak).toFixed(4) : 0;
+        equityRows.push({
+          strategy_id: strategyId,
+          user_id: user.id,
+          timestamp: t.exit_time,
+          equity: +runningEquity.toFixed(2),
+          drawdown: dd,
+          benchmark_return: null,
+        });
+      }
+
+      // Insert in batches
+      for (let i = 0; i < equityRows.length; i += 500) {
+        const batch = equityRows.slice(i, i + 500);
+        const { error } = await supabase.from("equity_curves").insert(batch);
+        if (error) throw error;
+      }
+
+      return strategyId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      queryClient.invalidateQueries({ queryKey: ["strategy"] });
+      toast.success("Equity curve recomputed from $0");
+    },
+    onError: (error: any) => {
+      toast.error(`Recompute failed: ${error.message}`);
+    },
+  });
+}
+
 // Tags hooks
 export function useTags() {
   const { user } = useAuth();
