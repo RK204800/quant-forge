@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EquityPoint } from "@/types";
-import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line } from "recharts";
+import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, ReferenceLine } from "recharts";
 import { format } from "date-fns";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
@@ -20,32 +20,42 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return (
     <div className="bg-card border border-border rounded-lg p-2 text-xs shadow-lg">
       <p className="text-muted-foreground mb-1">{label}</p>
-      {payload.map((entry: any, i: number) => (
-        <p key={i} style={{ color: entry.color }}>
-          {entry.dataKey === "equity" && `Equity: $${safeNum(entry.value).toLocaleString()}`}
-          {entry.dataKey === "drawdown" && `Drawdown: ${safeNum(entry.value).toFixed(2)}%`}
-          {entry.dataKey === "peak" && `Peak: $${safeNum(entry.value).toLocaleString()}`}
-          {entry.dataKey === "dailyReturn" && `Daily Return: ${safeNum(entry.value).toFixed(3)}%`}
-        </p>
-      ))}
+      {payload.map((entry: any, i: number) => {
+        const isEquity = entry.dataKey === "equityPos" || entry.dataKey === "equityNeg";
+        if (isEquity) {
+          const raw = entry.payload?.equity;
+          if (raw == null) return null;
+          const color = raw < 0 ? "hsl(0 72% 51%)" : "hsl(142 70% 45%)";
+          return <p key={i} style={{ color }}>P&L: ${safeNum(raw).toLocaleString()}</p>;
+        }
+        return (
+          <p key={i} style={{ color: entry.color }}>
+            {entry.dataKey === "drawdown" && `Drawdown: ${safeNum(entry.value).toFixed(2)}%`}
+            {entry.dataKey === "peak" && `Peak: $${safeNum(entry.value).toLocaleString()}`}
+            {entry.dataKey === "dailyReturn" && `Daily Return: ${safeNum(entry.value).toFixed(3)}%`}
+          </p>
+        );
+      })}
     </div>
   );
 };
 
 export function EquityCurve({ data, title = "Equity Curve" }: EquityCurveProps) {
   const [overlays, setOverlays] = useState<string[]>([]);
-  const validData = data.filter((d) => isFinite(d.equity) && d.equity > 0);
+  const validData = data.filter((d) => isFinite(d.equity));
 
   let runningPeak = 0;
   const chartData = validData.map((d, i) => {
     const eq = safeNum(d.equity);
     if (eq > runningPeak) runningPeak = eq;
     const prevEq = i > 0 ? safeNum(validData[i - 1].equity) : eq;
-    const dailyReturn = prevEq > 0 ? ((eq - prevEq) / prevEq) * 100 : 0;
+    const dailyReturn = prevEq !== 0 ? ((eq - prevEq) / Math.abs(prevEq)) * 100 : 0;
 
     return {
       date: format(new Date(d.timestamp), "MMM dd"),
       equity: eq,
+      equityPos: Math.max(eq, 0),
+      equityNeg: Math.min(eq, 0),
       drawdown: safeNum(-(d.drawdown * 100)),
       peak: runningPeak,
       dailyReturn,
@@ -74,12 +84,14 @@ export function EquityCurve({ data, title = "Equity Curve" }: EquityCurveProps) 
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 18%)" />
               <XAxis dataKey="date" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-              <YAxis yAxisId="equity" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(safeNum(v) / 1000).toFixed(0)}k`} />
+              <YAxis yAxisId="equity" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => { const abs = Math.abs(v); const label = abs >= 1000 ? `$${(abs/1000).toFixed(0)}k` : `$${abs.toFixed(0)}`; return v < 0 ? `-${label}` : label; }} />
               {(showDrawdown || showDaily) && (
                 <YAxis yAxisId="pct" orientation="right" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${safeNum(v).toFixed(0)}%`} />
               )}
               <Tooltip content={<CustomTooltip />} />
-              <Area yAxisId="equity" type="monotone" dataKey="equity" stroke="hsl(142 70% 45%)" fill="hsl(142 70% 45% / 0.1)" strokeWidth={2} dot={false} />
+              <ReferenceLine yAxisId="equity" y={0} stroke="hsl(215 15% 55%)" strokeDasharray="4 4" strokeOpacity={0.5} />
+              <Area yAxisId="equity" type="monotone" dataKey="equityPos" stroke="hsl(142 70% 45%)" fill="hsl(142 70% 45% / 0.1)" strokeWidth={2} dot={false} />
+              <Area yAxisId="equity" type="monotone" dataKey="equityNeg" stroke="hsl(0 72% 51%)" fill="hsl(0 72% 51% / 0.1)" strokeWidth={2} dot={false} />
               {showPeak && (
                 <Line yAxisId="equity" type="monotone" dataKey="peak" stroke="hsl(217 91% 60% / 0.5)" strokeWidth={1} strokeDasharray="4 4" dot={false} />
               )}
