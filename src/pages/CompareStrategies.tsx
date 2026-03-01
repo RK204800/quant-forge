@@ -11,7 +11,7 @@ import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { Link, useSearchParams } from "react-router-dom";
 import { Strategy, StrategyMetrics, EquityPoint } from "@/types";
-import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from "recharts";
+import { Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, BarChart } from "recharts";
 import { format } from "date-fns";
 
 const COLORS = [
@@ -337,6 +337,34 @@ const CompareStrategies = () => {
     });
 
     return { months: [...allMonths].sort(), data };
+  }, [selected]);
+
+  // Build trade duration distribution per strategy
+  const durationDistData = useMemo(() => {
+    if (selected.length === 0) return [];
+    const buckets = [
+      { label: "< 1h", max: 1 / 24 },
+      { label: "1-4h", max: 4 / 24 },
+      { label: "4-8h", max: 8 / 24 },
+      { label: "1d", max: 1 },
+      { label: "2-3d", max: 3 },
+      { label: "4-7d", max: 7 },
+      { label: "1-2w", max: 14 },
+      { label: "2-4w", max: 28 },
+      { label: "> 4w", max: Infinity },
+    ];
+
+    return buckets.map((b, bi) => {
+      const row: Record<string, any> = { bucket: b.label };
+      const prevMax = bi > 0 ? buckets[bi - 1].max : 0;
+      selected.forEach((s) => {
+        row[s.id] = s.trades.filter((t) => {
+          const days = (new Date(t.exitTime).getTime() - new Date(t.entryTime).getTime()) / (1000 * 60 * 60 * 24);
+          return days > prevMax && days <= b.max;
+        }).length;
+      });
+      return row;
+    });
   }, [selected]);
 
   if (isLoading) {
@@ -711,6 +739,31 @@ const CompareStrategies = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Trade Duration Distribution */}
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Trade Duration Distribution</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={durationDistData} barCategoryGap="20%">
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 18%)" />
+                    <XAxis dataKey="bucket" tick={{ fontSize: 10, fill: "hsl(220 9% 46%)" }} />
+                    <YAxis tick={{ fontSize: 10, fill: "hsl(220 9% 46%)" }} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "hsl(220 13% 12%)", border: "1px solid hsl(220 13% 20%)", borderRadius: 8, fontSize: 12 }}
+                      labelStyle={{ color: "hsl(220 9% 46%)" }}
+                    />
+                    {selected.map((s, i) => (
+                      <Bar key={s.id} dataKey={s.id} name={s.name} fill={COLORS[i % COLORS.length]} radius={[2, 2, 0, 0]} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
