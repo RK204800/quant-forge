@@ -15,6 +15,8 @@ import { MonteCarloChart } from "@/components/dashboard/MonteCarloChart";
 import { RROptimizer } from "@/components/dashboard/RROptimizer";
 import { RobustnessScore } from "@/components/dashboard/RobustnessScore";
 import { WalkForwardChart } from "@/components/dashboard/WalkForwardChart";
+import { ParametersTable } from "@/components/dashboard/ParametersTable";
+import { TradeChart } from "@/components/dashboard/TradeChart";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft } from "lucide-react";
@@ -41,6 +43,8 @@ const StrategyDetail = () => {
 
   const metrics = calculateMetrics(strategy.trades, strategy.equityCurve);
   const monthlyReturns = getMonthlyReturns(strategy.equityCurve);
+  const instrument = strategy.trades.length > 0 ? strategy.trades[0].instrument : "UNKNOWN";
+  const hasParameters = strategy.parameters && Object.keys(strategy.parameters).length > 0;
 
   return (
     <div className="space-y-6">
@@ -51,6 +55,7 @@ const StrategyDetail = () => {
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold font-mono tracking-tight">{strategy.name}</h1>
           <Badge variant={strategy.status === "active" ? "default" : "secondary"}>{strategy.status}</Badge>
+          {strategy.strategyClass && <Badge variant="outline">{strategy.strategyClass}</Badge>}
         </div>
         <p className="text-sm text-muted-foreground mt-1">{strategy.description}</p>
         <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
@@ -64,6 +69,7 @@ const StrategyDetail = () => {
           <TabsTrigger value="analysis" className="text-xs font-mono">Analysis</TabsTrigger>
           <TabsTrigger value="performance" className="text-xs font-mono">Performance</TabsTrigger>
           <TabsTrigger value="robustness" className="text-xs font-mono">Robustness</TabsTrigger>
+          <TabsTrigger value="tradechart" className="text-xs font-mono">Trade Chart</TabsTrigger>
           <TabsTrigger value="tradelog" className="text-xs font-mono">Trade Log</TabsTrigger>
         </TabsList>
 
@@ -74,6 +80,7 @@ const StrategyDetail = () => {
             <TradeDistribution trades={strategy.trades} />
           </div>
           <MonthlyHeatmap data={monthlyReturns} />
+          {hasParameters && <ParametersTable parameters={strategy.parameters!} />}
         </TabsContent>
 
         <TabsContent value="analysis" className="mt-4">
@@ -96,6 +103,10 @@ const StrategyDetail = () => {
           </div>
           <RROptimizer trades={strategy.trades} />
           <WalkForwardChart trades={strategy.trades} equityCurve={strategy.equityCurve} />
+        </TabsContent>
+
+        <TabsContent value="tradechart" className="mt-4">
+          <TradeChart trades={strategy.trades} instrument={instrument} />
         </TabsContent>
 
         <TabsContent value="tradelog" className="mt-4">

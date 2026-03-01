@@ -42,7 +42,7 @@ const ResetPassword = () => {
         <div className="flex flex-col items-center gap-3">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold font-mono tracking-tight">QuantForge</span>
+            <span className="text-2xl font-bold font-mono tracking-tight">JetQuant</span>
           </div>
         </div>
         <Card className="bg-card border-border">

@@ -24,7 +24,7 @@ const Auth = () => {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        toast.success("Welcome back to QuantForge");
+        toast.success("Welcome back to JetQuant");
       } else {
         const { error } = await supabase.auth.signUp({
           email,
@@ -63,7 +63,7 @@ const Auth = () => {
         <div className="flex flex-col items-center gap-3">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold font-mono tracking-tight">QuantForge</span>
+            <span className="text-2xl font-bold font-mono tracking-tight">JetQuant</span>
           </div>
           <p className="text-sm text-muted-foreground">Institutional-grade backtesting analytics</p>
         </div>
@@ -90,7 +90,7 @@ const Auth = () => {
                 <Label htmlFor="email" className="text-xs uppercase tracking-wider text-muted-foreground">Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input id="email" type="email" placeholder="trader@quantforge.io" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10 font-mono" required />
+                  <Input id="email" type="email" placeholder="trader@jetquant.io" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10 font-mono" required />
                 </div>
               </div>
               <div className="space-y-2">

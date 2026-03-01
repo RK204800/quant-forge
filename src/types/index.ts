@@ -39,6 +39,19 @@ export interface Strategy {
   updatedAt: string;
   trades: Trade[];
   equityCurve: EquityPoint[];
+  strategyClass?: string;
+  parameters?: Record<string, any>;
+  parameterTemplate?: Record<string, any>;
+  isFavorite?: boolean;
+  tags?: StrategyTag[];
+}
+
+export interface StrategyTag {
+  id: string;
+  userId: string;
+  name: string;
+  color: string;
+  createdAt: string;
 }
 
 export interface StrategyMetrics {

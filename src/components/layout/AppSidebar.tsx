@@ -29,7 +29,7 @@ export function AppSidebar() {
       <SidebarContent className="flex flex-col h-full">
         <div className={`flex items-center gap-2 px-4 py-5 ${collapsed ? "justify-center" : ""}`}>
           <TrendingUp className="h-6 w-6 text-primary" />
-          {!collapsed && <span className="text-lg font-bold font-mono tracking-tight text-foreground">QuantForge</span>}
+          {!collapsed && <span className="text-lg font-bold font-mono tracking-tight text-foreground">JetQuant</span>}
         </div>
 
         <SidebarGroup className="flex-1">

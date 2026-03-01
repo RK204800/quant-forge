@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Strategy, Trade, EquityPoint } from "@/types";
+import { Strategy, Trade, EquityPoint, StrategyTag } from "@/types";
 import { toast } from "sonner";
 
-function mapDbStrategy(row: any, trades: Trade[], equityCurve: EquityPoint[]): Strategy {
+function mapDbStrategy(row: any, trades: Trade[], equityCurve: EquityPoint[], tags: StrategyTag[] = []): Strategy {
   return {
     id: row.id,
     userId: row.user_id,
@@ -19,6 +19,11 @@ function mapDbStrategy(row: any, trades: Trade[], equityCurve: EquityPoint[]): S
     updatedAt: row.updated_at,
     trades,
     equityCurve,
+    strategyClass: row.strategy_class ?? undefined,
+    parameters: row.parameters ?? {},
+    parameterTemplate: row.parameter_template ?? {},
+    isFavorite: row.is_favorite ?? false,
+    tags,
   };
 }
 
@@ -68,9 +73,10 @@ export function useStrategies() {
 
       const strategyIds = strategiesData.map((s) => s.id);
 
-      const [tradesRes, equityRes] = await Promise.all([
+      const [tradesRes, equityRes, tagMappingsRes] = await Promise.all([
         supabase.from("trades").select("*").in("strategy_id", strategyIds).order("entry_time"),
         supabase.from("equity_curves").select("*").in("strategy_id", strategyIds).order("timestamp"),
+        supabase.from("strategy_tag_mapping").select("strategy_id, tag_id, strategy_tags(*)").in("strategy_id", strategyIds),
       ]);
 
       if (tradesRes.error) throw tradesRes.error;
@@ -88,8 +94,24 @@ export function useStrategies() {
         (equityByStrategy[e.strategy_id] ??= []).push(mapped);
       });
 
+      const tagsByStrategy: Record<string, StrategyTag[]> = {};
+      if (tagMappingsRes.data) {
+        tagMappingsRes.data.forEach((m: any) => {
+          if (m.strategy_tags) {
+            const tag: StrategyTag = {
+              id: m.strategy_tags.id,
+              userId: m.strategy_tags.user_id,
+              name: m.strategy_tags.name,
+              color: m.strategy_tags.color,
+              createdAt: m.strategy_tags.created_at,
+            };
+            (tagsByStrategy[m.strategy_id] ??= []).push(tag);
+          }
+        });
+      }
+
       return strategiesData.map((s) =>
-        mapDbStrategy(s, tradesByStrategy[s.id] ?? [], equityByStrategy[s.id] ?? [])
+        mapDbStrategy(s, tradesByStrategy[s.id] ?? [], equityByStrategy[s.id] ?? [], tagsByStrategy[s.id] ?? [])
       );
     },
     enabled: !!user,
@@ -104,20 +126,37 @@ export function useStrategy(id: string | undefined) {
     queryFn: async (): Promise<Strategy | null> => {
       if (!user || !id) return null;
 
-      const [stratRes, tradesRes, equityRes] = await Promise.all([
+      const [stratRes, tradesRes, equityRes, tagMappingsRes] = await Promise.all([
         supabase.from("strategies").select("*").eq("id", id).single(),
         supabase.from("trades").select("*").eq("strategy_id", id).order("entry_time"),
         supabase.from("equity_curves").select("*").eq("strategy_id", id).order("timestamp"),
+        supabase.from("strategy_tag_mapping").select("strategy_id, tag_id, strategy_tags(*)").eq("strategy_id", id),
       ]);
 
       if (stratRes.error) throw stratRes.error;
       if (tradesRes.error) throw tradesRes.error;
       if (equityRes.error) throw equityRes.error;
 
+      const tags: StrategyTag[] = [];
+      if (tagMappingsRes.data) {
+        tagMappingsRes.data.forEach((m: any) => {
+          if (m.strategy_tags) {
+            tags.push({
+              id: m.strategy_tags.id,
+              userId: m.strategy_tags.user_id,
+              name: m.strategy_tags.name,
+              color: m.strategy_tags.color,
+              createdAt: m.strategy_tags.created_at,
+            });
+          }
+        });
+      }
+
       return mapDbStrategy(
         stratRes.data,
         (tradesRes.data ?? []).map(mapDbTrade),
-        (equityRes.data ?? []).map(mapDbEquityPoint)
+        (equityRes.data ?? []).map(mapDbEquityPoint),
+        tags
       );
     },
     enabled: !!user && !!id,
@@ -131,6 +170,9 @@ interface SaveStrategyInput {
   timeframe?: string;
   broker?: string;
   backtestEngine?: string;
+  strategyClass?: string;
+  parameters?: Record<string, any>;
+  parameterTemplate?: Record<string, any>;
   trades: Trade[];
   equityCurve: EquityPoint[];
   format: string;
@@ -144,7 +186,6 @@ export function useSaveStrategy() {
     mutationFn: async (input: SaveStrategyInput) => {
       if (!user) throw new Error("Not authenticated");
 
-      // 1. Insert strategy
       const { data: strategy, error: sErr } = await supabase
         .from("strategies")
         .insert({
@@ -156,6 +197,9 @@ export function useSaveStrategy() {
           broker: input.broker ?? "",
           backtest_engine: input.backtestEngine ?? input.format,
           status: "active",
+          strategy_class: input.strategyClass ?? null,
+          parameters: input.parameters ?? {},
+          parameter_template: input.parameterTemplate ?? {},
         })
         .select("id")
         .single();
@@ -163,7 +207,6 @@ export function useSaveStrategy() {
 
       const strategyId = strategy.id;
 
-      // 2. Insert trades in batches of 500
       const tradeRows = input.trades.map((t) => ({
         strategy_id: strategyId,
         user_id: user.id,
@@ -188,7 +231,6 @@ export function useSaveStrategy() {
         if (error) throw error;
       }
 
-      // 3. Insert equity curve in batches of 500
       const equityRows = input.equityCurve.map((e) => ({
         strategy_id: strategyId,
         user_id: user.id,
@@ -212,6 +254,115 @@ export function useSaveStrategy() {
     },
     onError: (error: any) => {
       toast.error(`Failed to save: ${error.message}`);
+    },
+  });
+}
+
+export function useUpdateStrategy() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { id: string; name?: string; strategyClass?: string; isFavorite?: boolean; description?: string }) => {
+      const updates: Record<string, any> = {};
+      if (input.name !== undefined) updates.name = input.name;
+      if (input.strategyClass !== undefined) updates.strategy_class = input.strategyClass;
+      if (input.isFavorite !== undefined) updates.is_favorite = input.isFavorite;
+      if (input.description !== undefined) updates.description = input.description;
+
+      const { error } = await supabase.from("strategies").update(updates).eq("id", input.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      queryClient.invalidateQueries({ queryKey: ["strategy"] });
+    },
+    onError: (error: any) => {
+      toast.error(`Update failed: ${error.message}`);
+    },
+  });
+}
+
+export function useToggleFavorite() {
+  const updateStrategy = useUpdateStrategy();
+  return (id: string, current: boolean) => {
+    updateStrategy.mutate({ id, isFavorite: !current });
+  };
+}
+
+// Tags hooks
+export function useTags() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["strategy-tags", user?.id],
+    queryFn: async (): Promise<StrategyTag[]> => {
+      if (!user) return [];
+      const { data, error } = await supabase.from("strategy_tags").select("*").order("name");
+      if (error) throw error;
+      return (data ?? []).map((t) => ({
+        id: t.id,
+        userId: t.user_id,
+        name: t.name,
+        color: t.color ?? "#666666",
+        createdAt: t.created_at,
+      }));
+    },
+    enabled: !!user,
+  });
+}
+
+export function useCreateTag() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { name: string; color: string }) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase.from("strategy_tags").insert({ user_id: user.id, name: input.name, color: input.color });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["strategy-tags"] });
+    },
+  });
+}
+
+export function useDeleteTag() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (tagId: string) => {
+      const { error } = await supabase.from("strategy_tags").delete().eq("id", tagId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["strategy-tags"] });
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+    },
+  });
+}
+
+export function useAssignTag() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { strategyId: string; tagId: string }) => {
+      const { error } = await supabase.from("strategy_tag_mapping").insert({ strategy_id: input.strategyId, tag_id: input.tagId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      queryClient.invalidateQueries({ queryKey: ["strategy"] });
+    },
+  });
+}
+
+export function useRemoveTag() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { strategyId: string; tagId: string }) => {
+      const { error } = await supabase.from("strategy_tag_mapping").delete().eq("strategy_id", input.strategyId).eq("tag_id", input.tagId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      queryClient.invalidateQueries({ queryKey: ["strategy"] });
     },
   });
 }
