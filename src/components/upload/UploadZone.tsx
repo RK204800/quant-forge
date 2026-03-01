@@ -1,8 +1,24 @@
 import { useCallback, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Upload, FileText, AlertCircle } from "lucide-react";
+import { Upload, FileText, AlertCircle, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { parseFile } from "@/lib/parsers";
 import { ParseResult } from "@/lib/parsers";
+
+const SAMPLE_CSV = `ticker,entry_date,exit_date,direction,entry_price,exit_price,size,pnl,commission
+SPY,2025-01-02T10:00:00,2025-01-02T15:30:00,long,475.50,478.20,100,270,4.50
+AAPL,2025-01-03T09:30:00,2025-01-03T14:00:00,short,182.00,179.50,50,125,3.00
+TSLA,2025-01-06T10:15:00,2025-01-06T16:00:00,long,248.00,245.30,30,-81,2.50`;
+
+function downloadSampleCSV() {
+  const blob = new Blob([SAMPLE_CSV], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "sample_backtest.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 interface UploadZoneProps {
   strategyId: string;
@@ -59,6 +75,15 @@ export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
         <div className="text-center">
           <p className="text-sm font-medium text-foreground">Drop backtest file here or click to browse</p>
           <p className="text-xs text-muted-foreground mt-1">Supports Backtrader CSV, NinjaTrader, QuantConnect JSON, Generic CSV</p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-2 gap-1 text-xs text-muted-foreground hover:text-foreground"
+            onClick={(e) => { e.stopPropagation(); downloadSampleCSV(); }}
+          >
+            <Download className="h-3 w-3" /> Download sample CSV
+          </Button>
         </div>
         {fileName && !error && (
           <div className="flex items-center gap-2 text-xs text-primary">
