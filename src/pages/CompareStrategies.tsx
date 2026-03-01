@@ -400,6 +400,19 @@ const CompareStrategies = () => {
     });
   }, [selected, DURATION_BUCKETS, getTradesInBucket]);
 
+  // Build total PnL by duration bucket per strategy
+  const totalPnlByDurationData = useMemo(() => {
+    if (selected.length === 0) return [];
+    return DURATION_BUCKETS.map((b, bi) => {
+      const row: Record<string, any> = { bucket: b.label };
+      selected.forEach((s) => {
+        const trades = getTradesInBucket(s.trades, bi);
+        row[s.id] = trades.reduce((sum, t) => sum + t.pnlNet, 0);
+      });
+      return row;
+    });
+  }, [selected, DURATION_BUCKETS, getTradesInBucket]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -836,6 +849,33 @@ const CompareStrategies = () => {
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={avgPnlByDurationData} barCategoryGap="20%">
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 18%)" />
+                    <XAxis dataKey="bucket" tick={{ fontSize: 10, fill: "hsl(220 9% 46%)" }} />
+                    <YAxis tick={{ fontSize: 10, fill: "hsl(220 9% 46%)" }} tickFormatter={(v) => `$${safeNum(v).toFixed(0)}`} />
+                    <ReferenceLine y={0} stroke="hsl(220 9% 46%)" strokeDasharray="4 4" strokeOpacity={0.6} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "hsl(220 13% 12%)", border: "1px solid hsl(220 13% 20%)", borderRadius: 8, fontSize: 12 }}
+                      labelStyle={{ color: "hsl(220 9% 46%)" }}
+                      formatter={(v: any) => v != null ? [`$${Number(v).toFixed(2)}`] : ["—"]}
+                    />
+                    {selected.map((s, i) => (
+                      <Bar key={s.id} dataKey={s.id} name={s.name} fill={COLORS[i % COLORS.length]} radius={[2, 2, 0, 0]} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Total PnL by Duration */}
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Total PnL by Duration ($)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={totalPnlByDurationData} barCategoryGap="20%">
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 18%)" />
                     <XAxis dataKey="bucket" tick={{ fontSize: 10, fill: "hsl(220 9% 46%)" }} />
                     <YAxis tick={{ fontSize: 10, fill: "hsl(220 9% 46%)" }} tickFormatter={(v) => `$${safeNum(v).toFixed(0)}`} />
