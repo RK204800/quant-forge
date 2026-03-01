@@ -1,0 +1,1 @@
+ALTER TABLE public.strategies ADD COLUMN show_on_dashboard boolean DEFAULT true;

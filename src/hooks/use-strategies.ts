@@ -23,6 +23,7 @@ function mapDbStrategy(row: any, trades: Trade[], equityCurve: EquityPoint[], ta
     parameters: row.parameters ?? {},
     parameterTemplate: row.parameter_template ?? {},
     isFavorite: row.is_favorite ?? false,
+    showOnDashboard: row.show_on_dashboard ?? true,
     tags,
   };
 }
@@ -276,11 +277,12 @@ export function useUpdateStrategy() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { id: string; name?: string; strategyClass?: string; isFavorite?: boolean; description?: string }) => {
+    mutationFn: async (input: { id: string; name?: string; strategyClass?: string; isFavorite?: boolean; showOnDashboard?: boolean; description?: string }) => {
       const updates: Record<string, any> = {};
       if (input.name !== undefined) updates.name = input.name;
       if (input.strategyClass !== undefined) updates.strategy_class = input.strategyClass;
       if (input.isFavorite !== undefined) updates.is_favorite = input.isFavorite;
+      if (input.showOnDashboard !== undefined) updates.show_on_dashboard = input.showOnDashboard;
       if (input.description !== undefined) updates.description = input.description;
 
       const { error } = await supabase.from("strategies").update(updates).eq("id", input.id);
@@ -300,6 +302,13 @@ export function useToggleFavorite() {
   const updateStrategy = useUpdateStrategy();
   return (id: string, current: boolean) => {
     updateStrategy.mutate({ id, isFavorite: !current });
+  };
+}
+
+export function useToggleDashboard() {
+  const updateStrategy = useUpdateStrategy();
+  return (id: string, current: boolean) => {
+    updateStrategy.mutate({ id, showOnDashboard: !current });
   };
 }
 

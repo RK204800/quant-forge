@@ -94,6 +94,7 @@ export type Database = {
           name: string
           parameter_template: Json | null
           parameters: Json | null
+          show_on_dashboard: boolean | null
           status: string
           strategy_class: string | null
           timeframe: string | null
@@ -111,6 +112,7 @@ export type Database = {
           name: string
           parameter_template?: Json | null
           parameters?: Json | null
+          show_on_dashboard?: boolean | null
           status?: string
           strategy_class?: string | null
           timeframe?: string | null
@@ -128,6 +130,7 @@ export type Database = {
           name?: string
           parameter_template?: Json | null
           parameters?: Json | null
+          show_on_dashboard?: boolean | null
           status?: string
           strategy_class?: string | null
           timeframe?: string | null
