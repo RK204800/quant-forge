@@ -1,45 +1,73 @@
 import ExcelJS from "exceljs";
+import { scoreHeaderRow, normalizeHeader } from "./utils";
 
 /**
- * Read an XLSX/XLS ArrayBuffer and extract the "List of Trades" sheet
- * (or first sheet) as CSV text for downstream parsing.
+ * Read an XLSX/XLS ArrayBuffer and extract the best trade-data sheet
+ * as CSV text for downstream parsing.
  */
 export async function xlsxToCSV(buffer: ArrayBuffer): Promise<string> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
 
-  // Find the best sheet: prefer "List of Trades" or "Trades" (case-insensitive)
-  let targetSheet = workbook.worksheets.find((ws) =>
-    ws.name.toLowerCase().replace(/\s+/g, "") === "listoftrades"
-  );
-  if (!targetSheet) {
-    targetSheet = workbook.worksheets.find((ws) =>
-      ws.name.toLowerCase().replace(/\s+/g, "") === "trades"
-    );
-  }
-  if (!targetSheet) {
-    targetSheet = workbook.worksheets[0];
+  // Score each sheet by trade-column matches in its first 20 rows
+  let bestSheet = workbook.worksheets[0];
+  let bestScore = -1;
+
+  for (const ws of workbook.worksheets) {
+    // Fast path: prefer known sheet names
+    const name = normalizeHeader(ws.name);
+    if (name === "listoftrades" || name === "trades") {
+      bestSheet = ws;
+      bestScore = Infinity;
+      break;
+    }
+    // Score first 20 rows
+    let sheetScore = 0;
+    ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber > 20) return;
+      const values = row.values as (string | number | boolean | null | undefined)[];
+      const line = values.slice(1).map((c) => String(c ?? "")).join(",");
+      const s = scoreHeaderRow(line);
+      if (s > sheetScore) sheetScore = s;
+    });
+    if (sheetScore > bestScore) {
+      bestScore = sheetScore;
+      bestSheet = ws;
+    }
   }
 
-  if (!targetSheet) throw new Error("No sheets found in workbook");
+  if (!bestSheet) throw new Error("No sheets found in workbook");
 
-  const rows: string[] = [];
-  targetSheet.eachRow((row) => {
+  // Find the best header row within the sheet
+  const allRows: string[][] = [];
+  bestSheet.eachRow((row) => {
     const values = row.values as (string | number | boolean | null | undefined)[];
-    // ExcelJS row.values is 1-indexed (index 0 is undefined), so slice from 1
     const cells = values.slice(1).map((cell) => {
       if (cell == null) return "";
       const str = String(cell);
-      // Escape CSV: quote fields containing commas, quotes, or newlines
       if (str.includes(",") || str.includes('"') || str.includes("\n")) {
         return `"${str.replace(/"/g, '""')}"`;
       }
       return str;
     });
-    rows.push(cells.join(","));
+    allRows.push(cells);
   });
 
-  return rows.join("\n");
+  // Find best header row index
+  let headerIdx = 0;
+  let headerScore = 0;
+  const scanLimit = Math.min(allRows.length, 30);
+  for (let i = 0; i < scanLimit; i++) {
+    const s = scoreHeaderRow(allRows[i].join(","));
+    if (s > headerScore) {
+      headerScore = s;
+      headerIdx = i;
+    }
+  }
+
+  // Start from header row
+  const csvRows = allRows.slice(headerIdx).map((cells) => cells.join(","));
+  return csvRows.join("\n");
 }
 
 export function isExcelFile(fileName: string): boolean {
