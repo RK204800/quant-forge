@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Strategies from "./pages/Strategies";
 import StrategyDetail from "./pages/StrategyDetail";
 import UploadStrategy from "./pages/UploadStrategy";
+import CompareStrategies from "./pages/CompareStrategies";
 import Portfolio from "./pages/Portfolio";
 import Journal from "./pages/Journal";
 import LiveTrading from "./pages/LiveTrading";
@@ -49,6 +50,7 @@ const AppRoutes = () => (
     <Route path="/" element={<ProtectedRoute><AppLayout><Index /></AppLayout></ProtectedRoute>} />
     <Route path="/strategies" element={<ProtectedRoute><AppLayout><Strategies /></AppLayout></ProtectedRoute>} />
     <Route path="/strategies/upload" element={<ProtectedRoute><AppLayout><UploadStrategy /></AppLayout></ProtectedRoute>} />
+    <Route path="/strategies/compare" element={<ProtectedRoute><AppLayout><CompareStrategies /></AppLayout></ProtectedRoute>} />
     <Route path="/strategies/:id" element={<ProtectedRoute><AppLayout><StrategyDetail /></AppLayout></ProtectedRoute>} />
     <Route path="/portfolio" element={<ProtectedRoute><AppLayout><Portfolio /></AppLayout></ProtectedRoute>} />
     <Route path="/journal" element={<ProtectedRoute><AppLayout><Journal /></AppLayout></ProtectedRoute>} />

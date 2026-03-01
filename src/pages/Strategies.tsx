@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
-import { Plus, ArrowUpRight, Pencil, Star, Check, X } from "lucide-react";
+import { Plus, ArrowUpRight, Pencil, Star, Check, X, GitCompareArrows } from "lucide-react";
 import { FilterSidebar, FilterState } from "@/components/strategies/FilterSidebar";
 import { SortDropdown, SortField } from "@/components/strategies/SortDropdown";
 import { TagManagerDialog, TagAssigner } from "@/components/strategies/TagManager";
@@ -129,6 +129,9 @@ const Strategies = () => {
           <div className="flex items-center gap-2">
             <SortDropdown value={sortField} onChange={setSortField} />
             <TagManagerDialog />
+            <Link to="/strategies/compare">
+              <Button variant="outline" size="sm" className="gap-2"><GitCompareArrows className="h-4 w-4" /> Compare</Button>
+            </Link>
             <Link to="/strategies/upload">
               <Button size="sm" className="gap-2"><Plus className="h-4 w-4" /> Upload</Button>
             </Link>
