@@ -123,6 +123,35 @@ const CompareStrategies = () => {
       }));
   }, [selected]);
 
+  // Build drawdown data for overlay
+  const drawdownChartData = useMemo(() => {
+    if (selected.length === 0) return [];
+    const allDates = new Map<string, Record<string, number>>();
+
+    selected.forEach((s) => {
+      const sorted = [...s.equityCurve].sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+      if (sorted.length === 0) return;
+      let peak = sorted[0].equity;
+      sorted.forEach((p) => {
+        if (p.equity > peak) peak = p.equity;
+        const dd = peak > 0 ? -((peak - p.equity) / peak) * 100 : 0;
+        const dateKey = format(new Date(p.timestamp), "yyyy-MM-dd");
+        const row = allDates.get(dateKey) || {};
+        row[s.id] = dd;
+        allDates.set(dateKey, row);
+      });
+    });
+
+    return Array.from(allDates.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, values]) => ({
+        date: format(new Date(date), "MMM dd"),
+        ...values,
+      }));
+  }, [selected]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -211,6 +240,47 @@ const CompareStrategies = () => {
                         stroke={COLORS[i % COLORS.length]}
                         fill={`${COLORS[i % COLORS.length].replace(")", " / 0.08)")}`}
                         strokeWidth={2}
+                        dot={false}
+                      />
+                    ))}
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Drawdown comparison */}
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Drawdown Comparison (%)</CardTitle>
+                <div className="flex gap-3">
+                  {selected.map((s, i) => (
+                    <div key={s.id} className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                      <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[120px]">{s.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[250px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={drawdownChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 18%)" />
+                    <XAxis dataKey="date" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                    <YAxis tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${safeNum(v).toFixed(1)}%`} />
+                    <Tooltip content={<CompareTooltip />} />
+                    {selected.map((s, i) => (
+                      <Area
+                        key={s.id}
+                        type="monotone"
+                        dataKey={s.id}
+                        name={s.name}
+                        stroke={COLORS[i % COLORS.length]}
+                        fill={`${COLORS[i % COLORS.length].replace(")", " / 0.12)")}`}
+                        strokeWidth={1.5}
                         dot={false}
                       />
                     ))}
