@@ -19,10 +19,18 @@ export function detectFormat(content: string, fileName: string): FileFormat {
       if (data.Orders || data.TotalPerformance) return "quantconnect";
     } catch {}
   }
-  const lines = content.split("\n").map((l) => l.trim()).filter(Boolean);
-  if (lines[0]?.toLowerCase().includes("instrument") && lines[0]?.toLowerCase().includes("market position")) return "ninjatrader";
-  if (lines[0]?.toLowerCase().includes("trade #") || lines[0]?.toLowerCase().includes("trade#")) return "tradingview";
-  if (lines[0]?.toLowerCase().includes("ref") || lines[0]?.toLowerCase().includes("ticker")) return "backtrader";
+  // Strip BOM and normalize
+  const clean = content.replace(/^\uFEFF/, "");
+  const lines = clean.split("\n").map((l) => l.trim()).filter(Boolean);
+  const header = (lines[0] ?? "").toLowerCase().replace(/[_\s]+/g, "");
+
+  if (header.includes("instrument") && header.includes("marketposition")) return "ninjatrader";
+  if (header.includes("trade#") || header.includes("tradeno") || header.includes("tradenumber")) return "tradingview";
+  if (header.includes("ref") || header.includes("ticker")) return "backtrader";
+
+  // Fallback: if header has trade-like columns, try tradingview
+  if (header.includes("profit") && header.includes("price")) return "tradingview";
+
   return "generic";
 }
 

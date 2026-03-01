@@ -1,15 +1,22 @@
 import { Trade, EquityPoint } from "@/types";
 import Papa from "papaparse";
 import { ParseResult } from "./index";
-import { safeFloat, normalizeDateTime, computePnl } from "./utils";
+import { safeFloat, normalizeDateTime, computePnl, findCol } from "./utils";
+
+function col(row: Record<string, unknown>, ...names: string[]): string {
+  const val = findCol(row, ...names);
+  return val == null ? "" : String(val);
+}
 
 export function parseTradingView(content: string, strategyId: string): ParseResult {
   const warnings: string[] = [];
-  const result = Papa.parse(content, { header: true, skipEmptyLines: true });
+  // Strip BOM
+  const clean = content.replace(/^\uFEFF/, "");
+  const result = Papa.parse(clean, { header: true, skipEmptyLines: true });
 
   const tradeGroups: Record<string, any[]> = {};
   result.data.forEach((row: any) => {
-    const tradeNum = row["Trade #"] || row["Trade#"] || row["trade_number"];
+    const tradeNum = col(row, "Trade #", "Trade#", "Trade No", "trade_number", "TradeNo");
     if (!tradeNum) return;
     (tradeGroups[tradeNum] ??= []).push(row);
   });
@@ -26,8 +33,8 @@ export function parseTradingView(content: string, strategyId: string): ParseResu
       const entryRow = rows[0];
       const exitRow = rows.length > 1 ? rows[1] : rows[0];
 
-      const entryDateRaw = entryRow["Date/Time"] || entryRow["DateTime"] || entryRow["date_time"] || entryRow["Date"] || "";
-      const exitDateRaw = exitRow["Date/Time"] || exitRow["DateTime"] || exitRow["date_time"] || exitRow["Date"] || "";
+      const entryDateRaw = col(entryRow, "Date/Time", "DateTime", "date_time", "Date", "Entry Date", "EntryDate", "Entry Time");
+      const exitDateRaw = col(exitRow, "Date/Time", "DateTime", "date_time", "Date", "Exit Date", "ExitDate", "Exit Time");
 
       const entryTime = normalizeDateTime(entryDateRaw);
       const exitTime = normalizeDateTime(exitDateRaw) || entryTime;
@@ -37,27 +44,25 @@ export function parseTradingView(content: string, strategyId: string): ParseResu
         return;
       }
 
-      // Insert initial equity point before first trade
       if (!initialPointAdded) {
         equityCurve.push({ timestamp: entryTime, equity: startingBalance, drawdown: 0 });
         initialPointAdded = true;
       }
 
-      const typeField = (entryRow.Type || entryRow.type || "").toLowerCase();
-      const signalField = (entryRow.Signal || entryRow.signal || "").toLowerCase();
+      const typeField = col(entryRow, "Type", "type", "Side", "Action").toLowerCase();
+      const signalField = col(entryRow, "Signal", "signal").toLowerCase();
       const combined = `${typeField} ${signalField}`;
-      const direction: "long" | "short" = combined.includes("short") ? "short" : "long";
+      const direction: "long" | "short" = combined.includes("short") || combined.includes("sell") ? "short" : "long";
 
-      const profit = safeFloat(exitRow.Profit || exitRow.profit || exitRow["P&L"]);
-      const entryPrice = safeFloat(entryRow.Price || entryRow.price);
-      const exitPrice = safeFloat(exitRow.Price || exitRow.price);
-      const quantity = safeFloat(entryRow.Contracts || entryRow.contracts || entryRow.Shares || entryRow.shares || entryRow.Qty, 1);
+      const profit = safeFloat(findCol(exitRow, "Profit", "profit", "P&L", "PnL", "Net Profit", "NetProfit"));
+      const entryPrice = safeFloat(findCol(entryRow, "Price", "price", "Entry Price", "EntryPrice"));
+      const exitPrice = safeFloat(findCol(exitRow, "Price", "price", "Exit Price", "ExitPrice"));
+      const quantity = safeFloat(findCol(entryRow, "Contracts", "contracts", "Shares", "shares", "Qty", "Quantity", "Size"), 1);
       const effectivePnl = profit === 0 && entryPrice !== 0 && exitPrice !== 0
         ? computePnl(direction, entryPrice, exitPrice, quantity) : profit;
 
-      // MAE/MFE columns
-      const maeVal = exitRow.MAE || exitRow.mae;
-      const mfeVal = exitRow.MFE || exitRow.mfe;
+      const maeVal = findCol(exitRow, "MAE", "mae", "Max Adverse Excursion");
+      const mfeVal = findCol(exitRow, "MFE", "mfe", "Max Favorable Excursion");
 
       const trade: Trade = {
         id: `tv-${idx}`,
@@ -73,7 +78,7 @@ export function parseTradingView(content: string, strategyId: string): ParseResu
         pnlNet: effectivePnl,
         commission: 0,
         slippage: 0,
-        instrument: entryRow.Symbol || entryRow.symbol || entryRow.Ticker || "UNKNOWN",
+        instrument: col(entryRow, "Symbol", "symbol", "Ticker", "Instrument") || "UNKNOWN",
         ...(maeVal !== undefined ? { mae: safeFloat(maeVal) } : {}),
         ...(mfeVal !== undefined ? { mfe: safeFloat(mfeVal) } : {}),
       };
