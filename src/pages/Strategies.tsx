@@ -136,6 +136,16 @@ const Strategies = () => {
           <div className="flex items-center gap-2">
             <SortDropdown value={sortField} onChange={setSortField} />
             <TagManagerDialog />
+            {strategies.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs"
+                onClick={() => setCompareIds(compareIds.length === strategies.length ? [] : strategies.map((s) => s.id))}
+              >
+                {compareIds.length === strategies.length ? "Deselect All" : "Select All"}
+              </Button>
+            )}
             <Button
               variant={compareIds.length >= 2 ? "default" : "outline"}
               size="sm"
