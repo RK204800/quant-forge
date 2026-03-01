@@ -10,6 +10,7 @@ export function parseQuantConnect(content: string, strategyId: string): ParseRes
     const data = JSON.parse(content);
     const orders = data.Orders || {};
     let runningEquity = 100000;
+    let peak = runningEquity;
 
     Object.values(orders).forEach((order: any, i: number) => {
       if (order.Status !== "Filled" && order.Status !== 3) return;
@@ -31,8 +32,8 @@ export function parseQuantConnect(content: string, strategyId: string): ParseRes
       };
       trades.push(trade);
       runningEquity += trade.pnlNet;
-      const peak = Math.max(runningEquity, ...equityCurve.map((e) => e.equity), runningEquity);
-      equityCurve.push({ timestamp: trade.exitTime, equity: runningEquity, drawdown: (peak - runningEquity) / peak });
+      if (runningEquity > peak) peak = runningEquity;
+      equityCurve.push({ timestamp: trade.exitTime, equity: runningEquity, drawdown: peak > 0 ? (peak - runningEquity) / peak : 0 });
     });
   } catch {
     warnings.push("Failed to parse QuantConnect JSON");

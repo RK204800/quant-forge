@@ -17,13 +17,17 @@ export function calculateMetrics(trades: Trade[], equityCurve: EquityPoint[]): S
   const profitFactor = losses.length ? wins.reduce((a, b) => a + b, 0) / Math.abs(losses.reduce((a, b) => a + b, 0)) : Infinity;
   const expectancy = winRate * avgWin - (1 - winRate) * avgLoss;
 
-  const dailyReturns = getDailyReturns(equityCurve);
-  const annualizedReturn = dailyReturns.length ? (dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length) * TRADING_DAYS : 0;
-  const volatility = stdDev(dailyReturns) * Math.sqrt(TRADING_DAYS);
+  // Resample equity curve to calendar days for proper daily returns
+  const dailyReturns = getResampledDailyReturns(equityCurve);
+
+  // CAGR-style annualized return
+  const annualizedReturn = computeAnnualizedReturn(equityCurve);
+
+  const volatility = dailyReturns.length >= 2 ? stdDev(dailyReturns) * Math.sqrt(TRADING_DAYS) : 0;
   const sharpeRatio = volatility ? (annualizedReturn - RISK_FREE_RATE) / volatility : 0;
 
   const downsideReturns = dailyReturns.filter((r) => r < 0);
-  const downsideDev = stdDev(downsideReturns) * Math.sqrt(TRADING_DAYS);
+  const downsideDev = downsideReturns.length >= 2 ? stdDev(downsideReturns) * Math.sqrt(TRADING_DAYS) : 0;
   const sortinoRatio = downsideDev ? (annualizedReturn - RISK_FREE_RATE) / downsideDev : 0;
 
   const maxDD = maxDrawdown(equityCurve);
@@ -55,6 +59,73 @@ export function calculateMetrics(trades: Trade[], equityCurve: EquityPoint[]): S
   };
 }
 
+/**
+ * Resample equity curve to calendar-day intervals via forward-fill,
+ * then compute daily returns from consecutive days.
+ */
+function getResampledDailyReturns(curve: EquityPoint[]): number[] {
+  if (curve.length < 2) return [];
+
+  const sorted = [...curve].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // Build a map of date -> equity (last value wins if multiple trades on same day)
+  const equityByDate = new Map<string, number>();
+  sorted.forEach((p) => {
+    const dateKey = new Date(p.timestamp).toISOString().slice(0, 10);
+    equityByDate.set(dateKey, p.equity);
+  });
+
+  // Generate all calendar days between first and last
+  const firstDate = new Date(sorted[0].timestamp);
+  const lastDate = new Date(sorted[sorted.length - 1].timestamp);
+  firstDate.setHours(0, 0, 0, 0);
+  lastDate.setHours(0, 0, 0, 0);
+
+  const dailyEquities: number[] = [];
+  let lastKnownEquity = sorted[0].equity;
+  const current = new Date(firstDate);
+
+  while (current <= lastDate) {
+    const key = current.toISOString().slice(0, 10);
+    if (equityByDate.has(key)) {
+      lastKnownEquity = equityByDate.get(key)!;
+    }
+    dailyEquities.push(lastKnownEquity);
+    current.setDate(current.getDate() + 1);
+  }
+
+  // Compute returns between consecutive days
+  const returns: number[] = [];
+  for (let i = 1; i < dailyEquities.length; i++) {
+    if (dailyEquities[i - 1] !== 0) {
+      returns.push((dailyEquities[i] - dailyEquities[i - 1]) / dailyEquities[i - 1]);
+    }
+  }
+  return returns;
+}
+
+/**
+ * CAGR-style annualized return: (endEquity / startEquity)^(365/totalDays) - 1
+ */
+function computeAnnualizedReturn(curve: EquityPoint[]): number {
+  if (curve.length < 2) return 0;
+
+  const sorted = [...curve].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const startEquity = sorted[0].equity;
+  const endEquity = sorted[sorted.length - 1].equity;
+
+  if (startEquity <= 0 || endEquity <= 0) return 0;
+
+  const startMs = new Date(sorted[0].timestamp).getTime();
+  const endMs = new Date(sorted[sorted.length - 1].timestamp).getTime();
+  const totalDays = (endMs - startMs) / (1000 * 60 * 60 * 24);
+
+  if (totalDays < 1) return 0;
+
+  const totalReturn = endEquity / startEquity;
+  return Math.pow(totalReturn, 365 / totalDays) - 1;
+}
+
 export function getMonthlyReturns(equityCurve: EquityPoint[]): MonthlyReturn[] {
   if (equityCurve.length < 2) return [];
   const monthly: Record<string, { start: number; end: number; year: number; month: number }> = {};
@@ -71,18 +142,16 @@ export function getMonthlyReturns(equityCurve: EquityPoint[]): MonthlyReturn[] {
   }));
 }
 
-function getDailyReturns(curve: EquityPoint[]): number[] {
-  if (curve.length < 2) return [];
-  return curve.slice(1).map((p, i) => (p.equity - curve[i].equity) / curve[i].equity);
-}
-
 function maxDrawdown(curve: EquityPoint[]): number {
-  let peak = -Infinity;
+  if (curve.length < 1) return 0;
+  let peak = 0;
   let maxDD = 0;
   curve.forEach((p) => {
     if (p.equity > peak) peak = p.equity;
-    const dd = (peak - p.equity) / peak;
-    if (dd > maxDD) maxDD = dd;
+    if (peak > 0) {
+      const dd = (peak - p.equity) / peak;
+      if (dd > maxDD) maxDD = dd;
+    }
   });
   return maxDD;
 }
