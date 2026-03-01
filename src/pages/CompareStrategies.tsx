@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { computeRollingSharpe } from "@/lib/analytics";
 import { useStrategies } from "@/hooks/use-strategies";
 import { calculateMetrics } from "@/lib/analytics";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, GitCompareArrows, X } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Strategy, StrategyMetrics, EquityPoint } from "@/types";
 import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from "recharts";
 import { format } from "date-fns";
@@ -77,7 +77,17 @@ const CompareTooltip = ({ active, payload, label }: any) => {
 
 const CompareStrategies = () => {
   const { data: strategies = [], isLoading } = useStrategies();
+  const [searchParams] = useSearchParams();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Pre-select strategies from URL params
+  useEffect(() => {
+    const idsParam = searchParams.get("ids");
+    if (idsParam && strategies.length > 0 && selectedIds.length === 0) {
+      const ids = idsParam.split(",").filter((id) => strategies.some((s) => s.id === id));
+      if (ids.length > 0) setSelectedIds(ids);
+    }
+  }, [searchParams, strategies]);
 
   const toggleSelection = (id: string) => {
     setSelectedIds((prev) =>
