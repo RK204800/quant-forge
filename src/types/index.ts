@@ -14,6 +14,8 @@ export interface Trade {
   slippage: number;
   instrument: string;
   notes?: string;
+  mae?: number;
+  mfe?: number;
 }
 
 export interface EquityPoint {
@@ -56,6 +58,81 @@ export interface StrategyMetrics {
   bestTrade: number;
   worstTrade: number;
   avgHoldingPeriod: number;
+}
+
+export interface ExtendedMetrics extends StrategyMetrics {
+  grossProfit: number;
+  grossLoss: number;
+  totalCommission: number;
+  maxConsecWins: number;
+  maxConsecLosses: number;
+  avgTradesPerDay: number;
+  profitPerMonth: number;
+  maxRecoveryDays: number;
+  startDate: string;
+  endDate: string;
+  winningTrades: number;
+  losingTrades: number;
+  evenTrades: number;
+  avgWinLossRatio: number;
+}
+
+export interface MonteCarloResult {
+  simulations: number;
+  percentiles: {
+    p5: number;
+    p25: number;
+    p50: number;
+    p75: number;
+    p95: number;
+  };
+  maxDrawdownPercentiles: {
+    p5: number;
+    p25: number;
+    p50: number;
+    p75: number;
+    p95: number;
+  };
+  riskOfRuin: number;
+  equityPaths: number[][];
+}
+
+export interface RROptimizationPoint {
+  ratio: number;
+  label: string;
+  projectedWinRate: number;
+  profitFactor: number;
+  expectancy: number;
+  totalReturn: number;
+  survivingTrades: number;
+  avgWin: number;
+  avgLoss: number;
+}
+
+export interface WalkForwardSegment {
+  segmentIndex: number;
+  tradeCount: number;
+  sharpe: number;
+  winRate: number;
+  profitFactor: number;
+  totalReturn: number;
+}
+
+export interface RegimeInfo {
+  type: "bull" | "bear";
+  startDate: string;
+  endDate: string;
+  duration: number;
+  returnPct: number;
+  sharpe: number;
+}
+
+export interface StabilityScore {
+  overall: number;
+  sharpeConsistency: number;
+  drawdownRecovery: number;
+  winRateStability: number;
+  profitFactorStability: number;
 }
 
 export interface MonthlyReturn {
