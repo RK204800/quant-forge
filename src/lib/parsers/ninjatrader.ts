@@ -39,7 +39,7 @@ export function parseNinjaTrader(content: string, strategyId: string): ParseResu
         return;
       }
 
-      const dirRaw = String(findCol(row, "Market position", "MarketPosition", "direction", "Direction", "side", "Side", "type", "Type") ?? "long");
+      const dirRaw = String(findCol(row, "Market pos.", "Market pos", "Market position", "MarketPosition", "direction", "Direction", "side", "Side", "type", "Type") ?? "long");
       const direction: "long" | "short" = dirRaw.toLowerCase().includes("short") ? "short" : "long";
       const entryPrice = safeFloat(findCol(row, "Entry price", "EntryPrice", "entry_price", "Entry"));
       const exitPrice = safeFloat(findCol(row, "Exit price", "ExitPrice", "exit_price", "Exit"));

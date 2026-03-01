@@ -2,7 +2,13 @@
  * Safely parse a value to a finite number, returning fallback if unparseable.
  */
 export function safeFloat(val: unknown, fallback = 0): number {
-  const n = parseFloat(String(val ?? ""));
+  let s = String(val ?? "").trim();
+  // Strip currency symbols and commas
+  s = s.replace(/[$€£¥,]/g, "");
+  // Handle accounting negatives: (123.45) → -123.45
+  const acctMatch = s.match(/^\((.+)\)$/);
+  if (acctMatch) s = "-" + acctMatch[1];
+  const n = parseFloat(s);
   return isFinite(n) ? n : fallback;
 }
 
@@ -20,6 +26,30 @@ export function normalizeDateTime(dt: string): string | null {
     const ms = trimmed.length <= 10 ? Number(trimmed) * 1000 : Number(trimmed);
     const d = new Date(ms);
     if (!isNaN(d.getTime())) return d.toISOString();
+  }
+
+  // DD-Mon-YY(YY) with optional time (e.g. "02-Jan-26 10:54:00 AM")
+  const monthNames: Record<string, number> = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+  };
+  const monMatch = trimmed.match(
+    /^(\d{1,2})[\/\-]([A-Za-z]{3})[\/\-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i
+  );
+  if (monMatch) {
+    const [, dayStr, monStr, yearStr, hStr = "0", minStr = "0", sStr = "0", ampm] = monMatch;
+    const mon = monthNames[monStr.toLowerCase()];
+    if (mon !== undefined) {
+      let year = Number(yearStr);
+      if (year < 100) year += year < 70 ? 2000 : 1900;
+      let hour = Number(hStr);
+      if (ampm) {
+        if (ampm.toUpperCase() === "PM" && hour < 12) hour += 12;
+        if (ampm.toUpperCase() === "AM" && hour === 12) hour = 0;
+      }
+      const date = new Date(year, mon, Number(dayStr), hour, Number(minStr), Number(sStr));
+      if (!isNaN(date.getTime())) return date.toISOString();
+    }
   }
 
   // Try native Date parse first (handles ISO 8601, "YYYY-MM-DD HH:mm", etc.)
@@ -61,10 +91,11 @@ export function computePnl(direction: "long" | "short", entryPrice: number, exit
 }
 
 export function findCol(row: Record<string, unknown>, ...candidates: string[]): unknown {
+  const normalize = (s: string) => s.toLowerCase().replace(/[_\s.]+/g, "");
   for (const c of candidates) {
-    const lower = c.toLowerCase();
+    const lc = normalize(c);
     for (const key of Object.keys(row)) {
-      if (key.toLowerCase() === lower || key.toLowerCase().replace(/[_\s]/g, "") === lower.replace(/[_\s]/g, "")) {
+      if (normalize(key) === lc) {
         return row[key];
       }
     }
