@@ -48,8 +48,8 @@ const AppRoutes = () => (
     <Route path="/reset-password" element={<ResetPassword />} />
     <Route path="/" element={<ProtectedRoute><AppLayout><Index /></AppLayout></ProtectedRoute>} />
     <Route path="/strategies" element={<ProtectedRoute><AppLayout><Strategies /></AppLayout></ProtectedRoute>} />
-    <Route path="/strategies/:id" element={<ProtectedRoute><AppLayout><StrategyDetail /></AppLayout></ProtectedRoute>} />
     <Route path="/strategies/upload" element={<ProtectedRoute><AppLayout><UploadStrategy /></AppLayout></ProtectedRoute>} />
+    <Route path="/strategies/:id" element={<ProtectedRoute><AppLayout><StrategyDetail /></AppLayout></ProtectedRoute>} />
     <Route path="/portfolio" element={<ProtectedRoute><AppLayout><Portfolio /></AppLayout></ProtectedRoute>} />
     <Route path="/journal" element={<ProtectedRoute><AppLayout><Journal /></AppLayout></ProtectedRoute>} />
     <Route path="/live-trading" element={<ProtectedRoute><AppLayout><LiveTrading /></AppLayout></ProtectedRoute>} />
