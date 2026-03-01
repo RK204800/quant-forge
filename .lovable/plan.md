@@ -1,34 +1,48 @@
 
 
-## Display Negative Values in Red on Equity Curve
+## Fix TradingView Report Upload (XLSX + Robust CSV Parsing)
 
-Currently the equity curve filters out values where `equity <= 0` (line 37) and always renders in green. This plan ensures negative PnL values are properly displayed and colored red.
+There are two separate issues preventing uploads:
+
+### Problem 1: XLSX Files Not Supported
+TradingView's recommended export ("Download data as XLSX") produces an Excel file with 5 sheets (including "List of Trades"). The app currently only accepts `.csv`, `.json`, and `.txt` files -- XLSX is silently rejected or read as garbled text.
+
+### Problem 2: CSV Column Matching Too Rigid
+The TradingView CSV parser and format detector rely on exact column name matches (`Trade #`, `Type`, `Signal`, etc.). Real TradingView exports can have slight variations in column names, extra whitespace, or BOM characters that cause the header check to fail. When detection fails, it falls back to the Backtrader parser which also can't parse the data, resulting in "No trades found."
+
+---
 
 ### Changes
 
-**1. `src/components/dashboard/EquityCurve.tsx`**
+**1. Add `xlsx` (SheetJS) dependency**
+- Install the `xlsx` package to parse Excel files in the browser.
 
-- **Remove the `> 0` filter** on line 37: change `data.filter((d) => isFinite(d.equity) && d.equity > 0)` to `data.filter((d) => isFinite(d.equity))` so negative equity values are kept.
+**2. Create `src/lib/parsers/xlsx-reader.ts`**
+- A utility that reads an `.xlsx` file's ArrayBuffer, finds the "List of Trades" sheet (or first sheet if not found), and converts it to CSV text using SheetJS's `utils.sheet_to_csv()`.
+- Returns the CSV string so existing parsers can handle it.
 
-- **Add a $0 ReferenceLine** to the chart (import `ReferenceLine` from recharts) -- a dashed line at y=0 to visually separate profit from loss territory.
+**3. Update `src/components/upload/UploadZone.tsx`**
+- Add `.xlsx,.xls` to the file input `accept` attribute.
+- Before calling `parseFile`, check if the file name ends with `.xlsx` or `.xls`:
+  - If so, read the file as an `ArrayBuffer` instead of text.
+  - Pass it through the new XLSX reader to extract CSV from the "List of Trades" sheet.
+  - Then feed that CSV into `parseFile` as normal.
 
-- **Split the Area into two data series** to color positive green and negative red:
-  - Add two computed fields to each chart data point: `equityPos` (equity when >= 0, else 0) and `equityNeg` (equity when < 0, else 0).
-  - Render two `<Area>` components: one green for `equityPos`, one red for `equityNeg`.
+**4. Update `src/lib/parsers/index.ts` -- More robust format detection**
+- Normalize the header line: trim whitespace, remove BOM, lowercase.
+- Use `includes` checks that are more forgiving of whitespace/punctuation variations.
+- Add fallback: if no format is detected but the header contains trade-like columns (profit, price, date), try TradingView parser first, then Backtrader.
 
-- **Update Y-axis formatter** to handle negative and small values properly: use smart formatting instead of always dividing by 1000 (e.g., show `$500` instead of `$1k` for small values, and `-$2k` for negatives).
-
-- **Update tooltip** to show the value with red color when negative: change the "Equity" tooltip entry to conditionally apply red (`hsl(0 72% 51%)`) or green (`hsl(142 70% 45%)`) color based on sign.
+**5. Update `src/lib/parsers/tradingview.ts` -- Flexible column matching**
+- Use the `findCol` utility (already in `utils.ts`) instead of direct `row["Trade #"]` lookups, to handle variations like `Trade#`, `Trade #`, `trade_number`, `Trade No`, etc.
+- Also handle column name variations for Date/Time, Profit, Price, Contracts, Type, Signal.
+- Add support for single-row-per-trade format (some TradingView exports have one row per trade with separate entry/exit columns rather than paired entry+exit rows).
 
 ### Technical Details
 
-- Import `ReferenceLine` from recharts alongside existing imports.
-- Chart data mapping adds: `equityPos: Math.max(eq, 0)` and `equityNeg: Math.min(eq, 0)`.
-- Two `<Area>` components replace the single one:
-  - `equityPos`: stroke/fill green (`hsl(142 70% 45%)`)
-  - `equityNeg`: stroke/fill red (`hsl(0 72% 51%)`)
-- Y-axis tickFormatter: `(v) => { const abs = Math.abs(v); const label = abs >= 1000 ? \`$\${(abs/1000).toFixed(0)}k\` : \`$\${abs.toFixed(0)}\`; return v < 0 ? \`-\${label}\` : label; }`
-- ReferenceLine at `y={0}` with dashed stroke on the equity yAxisId.
-- CustomTooltip equity entry uses conditional color based on value sign.
-- No changes needed to parsers, Portfolio page, or other files -- this is purely a display fix in the EquityCurve component.
+- SheetJS (`xlsx`) is a well-maintained, browser-compatible library (~200KB gzipped).
+- The XLSX reader will iterate sheet names looking for a case-insensitive match on "list of trades" or "trades", falling back to the first sheet.
+- For the CSV detection fix, the BOM character (`\uFEFF`) will be stripped from the start of content before header analysis.
+- The `findCol` utility already handles case-insensitive fuzzy matching -- extending TradingView parser to use it ensures resilience to column name variations.
+- No database or backend changes needed -- this is purely a client-side parsing improvement.
 
