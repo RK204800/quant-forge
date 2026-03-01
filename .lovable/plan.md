@@ -1,55 +1,65 @@
 
-# Fix Incorrect Strategy Calculations
 
-## Problem Analysis
+# Fix Upload Rendering Issues
 
-After tracing through the code with actual database data, I found **3 critical bugs** in `src/lib/analytics.ts` that cause wrong metrics:
+## Root Cause Analysis
 
-### Bug 1: `getDailyReturns()` treats trade-level returns as daily returns
-The function computes returns between consecutive equity curve points, but each point corresponds to a **trade exit** -- not a calendar day. If 5 trades happen over 20 trading days, the code produces 4 "daily" returns spanning 20 actual days. This massively inflates annualized return (e.g., showing ~137% instead of ~12%).
+After investigating the session replay, database, and parser code, I found several interconnected bugs causing uploads to render incorrectly:
 
-**Impact**: Annualized Return, Sharpe Ratio, Sortino Ratio, and Calmar Ratio are all wrong.
+### Problem 1: NaN Corruption in Equity Calculations
+When a parser encounters an unparseable numeric field (e.g., empty string, unexpected format), `parseFloat("")` returns `NaN`. Once `runningEquity += NaN` executes, **all subsequent equity points become NaN**. The `safeNum` guard in EquityCurve catches this at render time (showing $0), but the underlying data is corrupted.
 
-**Fix**: Resample the equity curve to actual calendar-day intervals before computing returns, so each return genuinely represents one trading day.
+**Affected files**: All parsers (`backtrader.ts`, `tradingview.ts`, `ninjatrader.ts`, `quantconnect.ts`)
 
-### Bug 2: `annualizedReturn` calculation doesn't account for actual time span
-Even with resampled daily returns, annualized return should be computed from total return over the actual number of calendar days, not from average daily returns times 252.
+### Problem 2: Date Fallback to Today
+When dates can't be parsed, `normalizeDateTime` (and similar logic in other parsers) falls back to `new Date().toISOString()` -- today's date. This causes all equity points to show as "Mar 01" (today) instead of actual trade dates, making the chart meaningless.
 
-**Fix**: Calculate annualized return as `(endEquity / startEquity)^(252 / actualTradingDays) - 1` for a proper CAGR-style metric.
-
-### Bug 3: NaN values in chart tooltips
-Console errors show "Received NaN for the children attribute" in the equity curve tooltip. This can occur when the drawdown or equity values produce NaN during rendering (e.g., division by zero edge cases in `maxDrawdown` when peak is 0, or when equity curve has a single point).
-
-**Fix**: Add guards in the chart component's tooltip formatter and in the analytics calculations.
+### Problem 3: Generic Parser Column Mismatch
+When the format detector can't identify the file format, it falls back to the Backtrader parser. If the user's CSV has different column names (e.g., "Date" instead of "entry_date", "P/L" instead of "pnl"), all values parse as 0/NaN.
 
 ## Changes
 
-### 1. Rewrite `src/lib/analytics.ts` - getDailyReturns and annualized metrics
-
-- Replace `getDailyReturns()` with a version that interpolates equity to actual calendar days (filling forward on days without trades)
-- Compute `annualizedReturn` using CAGR formula: `(finalEquity / initialEquity)^(365 / totalDays) - 1`
-- Compute volatility from the properly resampled daily returns
-- Add edge-case guards (single trade, same-day trades, zero equity)
-
-### 2. Fix `src/components/dashboard/EquityCurve.tsx` - NaN tooltip guard
-
-- Add a custom tooltip formatter that handles NaN/undefined values gracefully
-- Ensure drawdown value is always a valid number before rendering
-
-### 3. Fix equity curve drawdown calculation in parsers
-
-The parsers (`backtrader.ts`, `tradingview.ts`, `ninjatrader.ts`, `quantconnect.ts`) all use an O(n^2) peak calculation:
+### 1. Add `safeFloat` utility to all parsers
+Create a shared helper that returns 0 instead of NaN for unparseable values, preventing equity corruption:
 ```text
-Math.max(runningEquity, ...equityCurve.map(e => e.equity), runningEquity)
+function safeFloat(val: unknown, fallback = 0): number {
+  const n = parseFloat(String(val ?? ""));
+  return isFinite(n) ? n : fallback;
+}
 ```
-This is redundant -- `runningEquity` is the current value, not necessarily the peak. Replace with a simple running `peak` variable tracked across iterations.
 
-## Technical Details
+Apply to every `parseFloat` call in all four parsers.
 
-The resampled daily returns approach:
-1. Sort equity points by timestamp
-2. Create a map of date-string to equity value
-3. Fill forward: for each calendar day between first and last trade, use the most recent known equity
-4. Compute returns from consecutive calendar days
+### 2. Improve generic CSV column detection
+Update the Backtrader/generic parser to handle more column name variations:
+- Date columns: "date", "Date", "entry_date", "Entry Date", "open_time", "datetime"
+- Price columns: "entry_price", "Entry", "Open", "open_price"
+- PnL columns: "pnl", "P&L", "P/L", "profit", "Profit", "net_profit", "Net P&L"
+- Quantity: "size", "qty", "quantity", "Quantity", "contracts", "volume"
 
-This ensures Sharpe/Sortino/Calmar ratios are computed on actual daily frequency data, matching industry-standard methodology.
+### 3. Fix date parsing with multi-format support
+Enhance `normalizeDateTime` (and add it to parsers that lack it) to handle common date formats:
+- `YYYY-MM-DD HH:mm:ss` (standard)
+- `MM/DD/YYYY HH:mm` (US format)
+- `DD/MM/YYYY` (EU format)
+- Unix timestamps
+- Skip the `new Date()` fallback -- instead mark the trade with a warning
+
+### 4. Add validation feedback in UploadZone
+When parsed trades have issues (NaN values, fallback dates), show specific warnings to the user so they know what went wrong, instead of silently rendering $0 equity.
+
+### 5. Guard EquityCurve and TradesTable against bad data
+- Filter out equity points with NaN/zero equity before charting
+- In TradesTable, show "N/A" for unparseable values instead of "NaN" or "0.00"
+
+## Files to Modify
+
+1. **New file**: `src/lib/parsers/utils.ts` -- shared `safeFloat` and `normalizeDateTime` helpers
+2. **Edit**: `src/lib/parsers/backtrader.ts` -- use `safeFloat`, expand column name matching
+3. **Edit**: `src/lib/parsers/tradingview.ts` -- use shared `safeFloat` and `normalizeDateTime`
+4. **Edit**: `src/lib/parsers/ninjatrader.ts` -- use `safeFloat`
+5. **Edit**: `src/lib/parsers/quantconnect.ts` -- use `safeFloat`
+6. **Edit**: `src/components/dashboard/EquityCurve.tsx` -- filter invalid data points
+7. **Edit**: `src/components/dashboard/TradesTable.tsx` -- guard against NaN display
+8. **Edit**: `src/components/upload/UploadZone.tsx` -- show parse quality feedback
+
