@@ -80,4 +80,4 @@ export interface JournalEntry {
   createdAt: string;
 }
 
-export type FileFormat = "backtrader" | "ninjatrader" | "quantconnect" | "generic";
+export type FileFormat = "backtrader" | "ninjatrader" | "quantconnect" | "tradingview" | "generic";
