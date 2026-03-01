@@ -1,48 +1,83 @@
 
+Goal: make every equity curve consistently start at $0 (immediately in UI and persistently in database), including older strategies already stored with a ~$100k baseline.
 
-## Fix TradingView Report Upload (XLSX + Robust CSV Parsing)
+What I found
+- The parser layer already generates $0-based curves for new uploads.
+- The “Recompute Equity” action exists, but most existing strategies still have first equity point = 100000 in stored data.
+- Database evidence confirms mixed baselines:
+  - Some strategies start at 0
+  - Others still start at 100000
+- A subtle recompute bug can still cause charts to appear to start above $0:
+  - `useRecomputeEquity` seeds the initial point at `trades[0].exit_time`
+  - Then it also adds the first trade result at the same timestamp
+  - With duplicate timestamps, ordering can make the non-zero point render first.
 
-There are two separate issues preventing uploads:
+Implementation approach
+1) Fix recompute logic so first point is unambiguously $0
+- File: `src/hooks/use-strategies.ts` (`useRecomputeEquity`)
+- Changes:
+  - Sort trades deterministically by `entry_time`, then `exit_time`, then `id` (stable sequence).
+  - Seed initial equity point at earliest `entry_time` (not first `exit_time`).
+  - Continue cumulative PnL from 0 after that.
+  - Keep drawdown guard (`peak > 0`) to avoid divide-by-zero issues from zero-start curves.
+- Result: recomputed strategy always has first visible point = exactly 0.
 
-### Problem 1: XLSX Files Not Supported
-TradingView's recommended export ("Download data as XLSX") produces an Excel file with 5 sheets (including "List of Trades"). The app currently only accepts `.csv`, `.json`, and `.txt` files -- XLSX is silently rejected or read as garbled text.
+2) Add client-side normalization safety net for legacy data
+- File: `src/hooks/use-strategies.ts`
+- Add helper like `normalizeCurveToZero(curve: EquityPoint[]): EquityPoint[]`:
+  - Sort by timestamp (stable)
+  - Detect first point’s equity as baseline
+  - If baseline !== 0, subtract baseline from every point
+  - Recompute drawdown from normalized equity (or preserve existing drawdown only when baseline is already zero)
+- Apply normalization in both:
+  - `useStrategies` mapped list data
+  - `useStrategy` single strategy data
+- Result: all screens show $0-start curves immediately, even before persistent migration.
 
-### Problem 2: CSV Column Matching Too Rigid
-The TradingView CSV parser and format detector rely on exact column name matches (`Trade #`, `Type`, `Signal`, etc.). Real TradingView exports can have slight variations in column names, extra whitespace, or BOM characters that cause the header check to fail. When detection fails, it falls back to the Backtrader parser which also can't parse the data, resulting in "No trades found."
+3) Add bulk recompute action for persistent cleanup
+- Files:
+  - `src/hooks/use-strategies.ts`
+  - `src/pages/Strategies.tsx`
+- Add `useRecomputeAllEquity` mutation:
+  - Fetch user strategies
+  - For each strategy, run same recompute routine used by single-strategy action
+  - Continue on per-strategy errors and show summary toast (e.g., “Recomputed 12/14 strategies”)
+- Add button in Strategies page toolbar:
+  - “Recompute All Equity”
+  - Loading state + disable during execution
+- Result: one-click migration for all legacy strategies, no manual per-strategy clicks.
 
----
+4) Tighten query ordering to reduce duplicate-timestamp drift
+- File: `src/hooks/use-strategies.ts`
+- For equity fetches, use deterministic ordering (timestamp + created_at/id) where available.
+- Result: consistent chart start and tooltip behavior when multiple points share same timestamp.
 
-### Changes
+5) Update tests to match zero-baseline model
+- File: `src/lib/parsers/tradingview.test.ts`
+- Current expectations are stale (still asserting ~100k).
+- Update to assert:
+  - initial equity point at 0 (if parser includes seed point)
+  - cumulative values relative to zero
+- Add/adjust test for recompute-like duplicate timestamp edge case (if test coverage exists for hooks/utils).
 
-**1. Add `xlsx` (SheetJS) dependency**
-- Install the `xlsx` package to parse Excel files in the browser.
+Why this solves your issue
+- Immediate display fix: normalization ensures curves render from $0 now.
+- Permanent data fix: bulk recompute rewrites stored curves to proper $0 baseline.
+- Regression prevention: recompute timestamp fix prevents ambiguous first point ordering.
 
-**2. Create `src/lib/parsers/xlsx-reader.ts`**
-- A utility that reads an `.xlsx` file's ArrayBuffer, finds the "List of Trades" sheet (or first sheet if not found), and converts it to CSV text using SheetJS's `utils.sheet_to_csv()`.
-- Returns the CSV string so existing parsers can handle it.
+Backend/security considerations
+- No schema migration needed.
+- No RLS changes needed (existing user-owned policies already support read/delete/insert on equity rows).
+- Only user-owned data is updated through existing authenticated flow.
 
-**3. Update `src/components/upload/UploadZone.tsx`**
-- Add `.xlsx,.xls` to the file input `accept` attribute.
-- Before calling `parseFile`, check if the file name ends with `.xlsx` or `.xls`:
-  - If so, read the file as an `ArrayBuffer` instead of text.
-  - Pass it through the new XLSX reader to extract CSV from the "List of Trades" sheet.
-  - Then feed that CSV into `parseFile` as normal.
+Validation checklist
+1) Pick 2 known legacy strategies that currently start at ~100k.
+2) Confirm they display from $0 immediately after code change (without pressing any button).
+3) Run “Recompute All Equity”.
+4) Refresh app and verify those strategies still start at $0 (persistent fix).
+5) Open one strategy detail and click single “Recompute Equity”; verify first point remains $0.
+6) Verify negative section still renders red and zero reference line is visible.
 
-**4. Update `src/lib/parsers/index.ts` -- More robust format detection**
-- Normalize the header line: trim whitespace, remove BOM, lowercase.
-- Use `includes` checks that are more forgiving of whitespace/punctuation variations.
-- Add fallback: if no format is detected but the header contains trade-like columns (profit, price, date), try TradingView parser first, then Backtrader.
-
-**5. Update `src/lib/parsers/tradingview.ts` -- Flexible column matching**
-- Use the `findCol` utility (already in `utils.ts`) instead of direct `row["Trade #"]` lookups, to handle variations like `Trade#`, `Trade #`, `trade_number`, `Trade No`, etc.
-- Also handle column name variations for Date/Time, Profit, Price, Contracts, Type, Signal.
-- Add support for single-row-per-trade format (some TradingView exports have one row per trade with separate entry/exit columns rather than paired entry+exit rows).
-
-### Technical Details
-
-- SheetJS (`xlsx`) is a well-maintained, browser-compatible library (~200KB gzipped).
-- The XLSX reader will iterate sheet names looking for a case-insensitive match on "list of trades" or "trades", falling back to the first sheet.
-- For the CSV detection fix, the BOM character (`\uFEFF`) will be stripped from the start of content before header analysis.
-- The `findCol` utility already handles case-insensitive fuzzy matching -- extending TradingView parser to use it ensures resilience to column name variations.
-- No database or backend changes needed -- this is purely a client-side parsing improvement.
-
+Risk and mitigation
+- Risk: changing baseline impacts metric calculations that assume absolute equity.
+- Mitigation: this plan only fixes baseline consistency; if desired, I can follow up by hardening annualized return/drawdown ratio formulas for pure cumulative-PnL curves in a dedicated pass.
