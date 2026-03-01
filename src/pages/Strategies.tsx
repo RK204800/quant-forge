@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useStrategies, useUpdateStrategy, useToggleFavorite, useTags } from "@/hooks/use-strategies";
+import { useStrategies, useUpdateStrategy, useToggleFavorite, useTags, useRecomputeAllEquity } from "@/hooks/use-strategies";
 import { calculateMetrics } from "@/lib/analytics";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, ArrowUpRight, Pencil, Star, Check, X, GitCompareArrows } from "lucide-react";
+import { Plus, ArrowUpRight, Pencil, Star, Check, X, GitCompareArrows, RefreshCw } from "lucide-react";
 import { FilterSidebar, FilterState } from "@/components/strategies/FilterSidebar";
 import { SortDropdown, SortField } from "@/components/strategies/SortDropdown";
 import { TagManagerDialog, TagAssigner } from "@/components/strategies/TagManager";
@@ -33,6 +33,7 @@ const Strategies = () => {
   const { data: tags = [] } = useTags();
   const updateStrategy = useUpdateStrategy();
   const toggleFavorite = useToggleFavorite();
+  const recomputeAll = useRecomputeAllEquity();
   const navigate = useNavigate();
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -135,6 +136,16 @@ const Strategies = () => {
           </div>
           <div className="flex items-center gap-2">
             <SortDropdown value={sortField} onChange={setSortField} />
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={recomputeAll.isPending}
+              onClick={() => recomputeAll.mutate()}
+            >
+              <RefreshCw className={`h-4 w-4 ${recomputeAll.isPending ? "animate-spin" : ""}`} />
+              {recomputeAll.isPending ? "Recomputing…" : "Recompute All"}
+            </Button>
             <TagManagerDialog />
             {strategies.length > 0 && (
               <Button
