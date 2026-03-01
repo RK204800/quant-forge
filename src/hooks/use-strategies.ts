@@ -89,8 +89,8 @@ export function useStrategies() {
       const strategyIds = strategiesData.map((s) => s.id);
 
       const [tradesRes, equityRes, tagMappingsRes] = await Promise.all([
-        supabase.from("trades").select("*").in("strategy_id", strategyIds).order("entry_time"),
-        supabase.from("equity_curves").select("*").in("strategy_id", strategyIds).order("timestamp").order("created_at"),
+        supabase.from("trades").select("*").in("strategy_id", strategyIds).order("entry_time").limit(10000),
+        supabase.from("equity_curves").select("*").in("strategy_id", strategyIds).order("timestamp").order("created_at").limit(10000),
         supabase.from("strategy_tag_mapping").select("strategy_id, tag_id, strategy_tags(*)").in("strategy_id", strategyIds),
       ]);
 
@@ -143,8 +143,8 @@ export function useStrategy(id: string | undefined) {
 
       const [stratRes, tradesRes, equityRes, tagMappingsRes] = await Promise.all([
         supabase.from("strategies").select("*").eq("id", id).single(),
-        supabase.from("trades").select("*").eq("strategy_id", id).order("entry_time"),
-        supabase.from("equity_curves").select("*").eq("strategy_id", id).order("timestamp").order("created_at"),
+        supabase.from("trades").select("*").eq("strategy_id", id).order("entry_time").limit(10000),
+        supabase.from("equity_curves").select("*").eq("strategy_id", id).order("timestamp").order("created_at").limit(10000),
         supabase.from("strategy_tag_mapping").select("strategy_id, tag_id, strategy_tags(*)").eq("strategy_id", id),
       ]);
 
@@ -326,7 +326,8 @@ export function useRecomputeEquity() {
         .eq("strategy_id", strategyId)
         .order("entry_time")
         .order("exit_time")
-        .order("id");
+        .order("id")
+        .limit(10000);
       if (tErr) throw tErr;
       if (!trades?.length) throw new Error("No trades found for this strategy");
 
@@ -477,7 +478,8 @@ export function useRecomputeAllEquity() {
             .eq("strategy_id", s.id)
             .order("entry_time")
             .order("exit_time")
-            .order("id");
+            .order("id")
+            .limit(10000);
           if (tErr) throw tErr;
           if (!trades?.length) { failed++; continue; }
 
