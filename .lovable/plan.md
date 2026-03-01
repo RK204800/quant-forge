@@ -1,38 +1,49 @@
 
 
-## Add/Remove Strategies from Dashboard
+## Add Dashboard & Portfolio Actions to Strategies Page
 
-### Current Behavior
-The dashboard shows ALL strategies and uses the first one as the "primary" deep-dive. There's no way to control which strategies appear.
+### Overview
+Add two new action buttons to the Strategies page toolbar (next to Compare and Upload) that work with the existing checkbox selection:
 
-### Approach
-Add a `show_on_dashboard` boolean column to the `strategies` table (default `true` so existing strategies remain visible). The dashboard will filter to only show pinned strategies, and provide UI to add/remove them.
+1. **"Add to Dashboard"** button -- bulk-toggle `show_on_dashboard` for selected strategies
+2. **"Create Portfolio"** green button -- navigates to the Portfolio page with selected strategy IDs
+
+Also update the Portfolio page to accept strategy IDs via URL params and use real database strategies instead of mock data.
 
 ### Changes
 
-**1. Database Migration**
-- Add `show_on_dashboard boolean DEFAULT true` to the `strategies` table
-- Existing strategies will automatically appear on dashboard (backward compatible)
+**1. Update `src/pages/Strategies.tsx`**
+- Import `useToggleDashboard` from hooks
+- Add a **"Add to Dashboard"** button (with LayoutDashboard icon) next to Compare:
+  - Enabled when 1+ strategies are selected via checkboxes
+  - On click, calls `useToggleDashboard` for each selected strategy ID, setting `show_on_dashboard = true`
+  - Shows toast confirmation "X strategies added to dashboard"
+- Add a **"Create Portfolio"** button with green styling (`bg-green-600 hover:bg-green-700 text-white`):
+  - Enabled when 2+ strategies are selected
+  - On click, navigates to `/portfolio?ids=id1,id2,...`
+  - Placed between Compare and Upload buttons
 
-**2. Update `src/hooks/use-strategies.ts`**
-- Add a `useToggleDashboard(id, current)` hook (similar to existing `useToggleFavorite`) that flips `show_on_dashboard`
-- Update `useUpdateStrategy` to accept `showOnDashboard` field
+**2. Update `src/pages/Portfolio.tsx`**
+- Replace `mockStrategies` with real data from `useStrategies()` hook
+- Read `ids` query parameter from URL (`useSearchParams`)
+- If `ids` param present, filter strategies to only those IDs
+- If no `ids` param, show all strategies (backward compatible)
+- Initialize weights equally among the filtered strategies
+- Keep the existing weighted equity curve combination logic
 
-**3. Update `src/pages/Index.tsx`**
-- Filter strategies to only those with `showOnDashboard === true`
-- Add an "X" remove button on each strategy card to unpin it from dashboard
-- Add an "Add Strategy" button/dropdown that lists strategies NOT on the dashboard, letting the user add them back
-- When no strategies are pinned, show a prompt to add strategies (different from the "no strategies exist" empty state)
-- Primary deep-dive uses the first pinned strategy
+### No database changes needed
+- `show_on_dashboard` column already exists
+- `useToggleDashboard` hook already exists
+- Portfolio page just needs to use real data and accept URL params
 
-**4. Update `src/types/index.ts`**
-- Add `showOnDashboard: boolean` to the `Strategy` type
+### UI Layout (toolbar area)
+```text
+[Sort] [Recompute All] [Tags] [Select All] [Add to Dashboard] [Compare (N)] [Create Portfolio] [Upload]
+```
 
-**5. Update `mapDbStrategy` in `src/hooks/use-strategies.ts`**
-- Map `show_on_dashboard` to the new field
+The "Create Portfolio" button will be green to make it visually distinct, appearing only when 2+ strategies are selected (otherwise outline style).
 
-### Technical Details
+### Files to modify
+- `src/pages/Strategies.tsx` -- Add two new action buttons using existing checkbox selection
+- `src/pages/Portfolio.tsx` -- Use real strategies from database, accept `ids` query param
 
-The remove button will be a small "X" icon in the top-right corner of each strategy card (with `e.preventDefault()` to avoid navigating to the strategy detail). The "Add Strategy" control will be a Popover with a checklist of all available strategies, showing checkmarks for those already on the dashboard.
-
-No RLS changes needed -- the existing user-owned UPDATE policy covers this column.
