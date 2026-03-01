@@ -1,7 +1,7 @@
 import Papa from "papaparse";
 import { Trade, EquityPoint } from "@/types";
 import { ParseResult } from "./index";
-import { safeFloat, normalizeDateTime } from "./utils";
+import { safeFloat, normalizeDateTime, computePnl } from "./utils";
 
 export function parseNinjaTrader(content: string, strategyId: string): ParseResult {
   const warnings: string[] = [];
@@ -27,17 +27,24 @@ export function parseNinjaTrader(content: string, strategyId: string): ParseResu
         return;
       }
 
+      const direction: "long" | "short" = (row["Market position"] || "long").toLowerCase().includes("short") ? "short" : "long";
+      const entryPrice = safeFloat(row["Entry price"]);
+      const exitPrice = safeFloat(row["Exit price"]);
+      const quantity = safeFloat(row.Quantity, 1);
+      const effectivePnl = pnl === 0 && entryPrice !== 0 && exitPrice !== 0
+        ? computePnl(direction, entryPrice, exitPrice, quantity) : pnl;
+
       const trade: Trade = {
         id: `nt-${i}`,
         strategyId,
         entryTime,
         exitTime: exitTime || entryTime,
-        direction: (row["Market position"] || "long").toLowerCase().includes("short") ? "short" : "long",
-        entryPrice: safeFloat(row["Entry price"]),
-        exitPrice: safeFloat(row["Exit price"]),
-        quantity: safeFloat(row.Quantity, 1),
-        pnlGross: pnl,
-        pnlNet: pnl - commission,
+        direction,
+        entryPrice,
+        exitPrice,
+        quantity,
+        pnlGross: effectivePnl,
+        pnlNet: effectivePnl - commission,
         commission,
         slippage: 0,
         instrument: row.Instrument || "UNKNOWN",

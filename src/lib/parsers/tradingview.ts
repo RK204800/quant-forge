@@ -1,7 +1,7 @@
 import { Trade, EquityPoint } from "@/types";
 import Papa from "papaparse";
 import { ParseResult } from "./index";
-import { safeFloat, normalizeDateTime } from "./utils";
+import { safeFloat, normalizeDateTime, computePnl } from "./utils";
 
 export function parseTradingView(content: string, strategyId: string): ParseResult {
   const warnings: string[] = [];
@@ -42,6 +42,12 @@ export function parseTradingView(content: string, strategyId: string): ParseResu
         return;
       }
 
+      const entryPrice = safeFloat(entryRow.Price || entryRow.price);
+      const exitPrice = safeFloat(exitRow.Price || exitRow.price);
+      const quantity = safeFloat(entryRow.Contracts || entryRow.contracts || entryRow.Shares || entryRow.shares || entryRow.Qty, 1);
+      const effectivePnl = profit === 0 && entryPrice !== 0 && exitPrice !== 0
+        ? computePnl(direction, entryPrice, exitPrice, quantity) : profit;
+
       const trade: Trade = {
         id: `tv-${idx}`,
         strategyId,
@@ -49,11 +55,11 @@ export function parseTradingView(content: string, strategyId: string): ParseResu
         entryTime,
         exitTime: exitTime || entryTime,
         direction,
-        entryPrice: safeFloat(entryRow.Price || entryRow.price),
-        exitPrice: safeFloat(exitRow.Price || exitRow.price),
-        quantity: safeFloat(entryRow.Contracts || entryRow.contracts || entryRow.Shares || entryRow.shares || entryRow.Qty, 1),
-        pnlGross: profit,
-        pnlNet: profit,
+        entryPrice,
+        exitPrice,
+        quantity,
+        pnlGross: effectivePnl,
+        pnlNet: effectivePnl,
         commission: 0,
         slippage: 0,
         instrument: entryRow.Symbol || entryRow.symbol || entryRow.Ticker || "UNKNOWN",

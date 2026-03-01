@@ -1,7 +1,7 @@
 import Papa from "papaparse";
 import { Trade, EquityPoint } from "@/types";
 import { ParseResult } from "./index";
-import { safeFloat, normalizeDateTime, findCol } from "./utils";
+import { safeFloat, normalizeDateTime, findCol, computePnl } from "./utils";
 
 export function parseBacktraderCSV(content: string, strategyId: string): ParseResult {
   const warnings: string[] = [];
@@ -28,17 +28,24 @@ export function parseBacktraderCSV(content: string, strategyId: string): ParseRe
       }
 
       const dirRaw = String(findCol(row, "direction", "type", "side", "Direction", "Type", "Side") ?? "long");
+      const direction: "long" | "short" = dirRaw.toLowerCase().includes("short") ? "short" : "long";
+      const entryPrice = safeFloat(findCol(row, "entry_price", "EntryPrice", "Open", "open_price", "Entry"));
+      const exitPrice = safeFloat(findCol(row, "exit_price", "ExitPrice", "Close", "close_price", "Exit"));
+      const quantity = safeFloat(findCol(row, "size", "quantity", "Quantity", "qty", "Qty", "contracts", "Contracts", "volume"), 1);
+      const effectivePnl = pnl === 0 && entryPrice !== 0 && exitPrice !== 0
+        ? computePnl(direction, entryPrice, exitPrice, quantity) : pnl;
+
       const trade: Trade = {
         id: `bt-${i}`,
         strategyId,
         entryTime,
         exitTime: exitTime || entryTime,
-        direction: dirRaw.toLowerCase().includes("short") ? "short" : "long",
-        entryPrice: safeFloat(findCol(row, "entry_price", "EntryPrice", "Open", "open_price", "Entry")),
-        exitPrice: safeFloat(findCol(row, "exit_price", "ExitPrice", "Close", "close_price", "Exit")),
-        quantity: safeFloat(findCol(row, "size", "quantity", "Quantity", "qty", "Qty", "contracts", "Contracts", "volume"), 1),
-        pnlGross: pnl,
-        pnlNet: pnl - commission,
+        direction,
+        entryPrice,
+        exitPrice,
+        quantity,
+        pnlGross: effectivePnl,
+        pnlNet: effectivePnl - commission,
         commission,
         slippage: 0,
         instrument: String(findCol(row, "ticker", "symbol", "Instrument", "Symbol", "Ticker", "instrument") ?? "UNKNOWN"),

@@ -50,6 +50,16 @@ export function normalizeDateTime(dt: string): string | null {
 /**
  * Case-insensitive column lookup: find the first matching key from a row object.
  */
+/**
+ * Compute PnL from entry/exit prices when no explicit PnL column exists.
+ */
+export function computePnl(direction: "long" | "short", entryPrice: number, exitPrice: number, quantity: number): number {
+  if (entryPrice === 0 || exitPrice === 0) return 0;
+  return direction === "short"
+    ? (entryPrice - exitPrice) * quantity
+    : (exitPrice - entryPrice) * quantity;
+}
+
 export function findCol(row: Record<string, unknown>, ...candidates: string[]): unknown {
   for (const c of candidates) {
     const lower = c.toLowerCase();

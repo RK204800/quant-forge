@@ -1,6 +1,6 @@
 import { Trade, EquityPoint } from "@/types";
 import { ParseResult } from "./index";
-import { safeFloat, normalizeDateTime } from "./utils";
+import { safeFloat, normalizeDateTime, computePnl } from "./utils";
 
 export function parseQuantConnect(content: string, strategyId: string): ParseResult {
   const warnings: string[] = [];
@@ -17,7 +17,9 @@ export function parseQuantConnect(content: string, strategyId: string): ParseRes
       if (order.Status !== "Filled" && order.Status !== 3) return;
       const price = safeFloat(order.Price);
       const qty = Math.abs(safeFloat(order.Quantity));
-      const pnl = price * qty * 0.001; // simplified
+      const direction: "long" | "short" = (order.Direction || "buy").toLowerCase().includes("sell") ? "short" : "long";
+      const lastFillPrice = safeFloat(order.LastFillPrice || order.Price);
+      const pnl = computePnl(direction, price, lastFillPrice, qty);
 
       const entryTime = normalizeDateTime(order.CreatedTime || order.Time || "");
       const exitTime = normalizeDateTime(order.LastFillTime || order.Time || "") || entryTime;
@@ -32,9 +34,9 @@ export function parseQuantConnect(content: string, strategyId: string): ParseRes
         strategyId,
         entryTime,
         exitTime: exitTime || entryTime,
-        direction: (order.Direction || "buy").toLowerCase().includes("sell") ? "short" : "long",
+        direction,
         entryPrice: price,
-        exitPrice: price,
+        exitPrice: lastFillPrice,
         quantity: qty,
         pnlGross: pnl,
         pnlNet: pnl,
