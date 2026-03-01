@@ -318,7 +318,7 @@ const CompareStrategies = () => {
         </div>
       </div>
 
-      <div ref={contentRef} className="space-y-6">
+      <div className="space-y-6">
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-mono">Select Strategies ({selectedIds.length} selected)</CardTitle>
@@ -353,7 +353,7 @@ const CompareStrategies = () => {
       </Card>
 
       {selected.length >= 2 && (
-        <>
+        <div ref={contentRef} className="space-y-6">
           {/* Equity curve overlay */}
           <Card className="bg-card border-border">
             <CardHeader className="pb-2">
@@ -612,7 +612,7 @@ const CompareStrategies = () => {
               </div>
             </CardContent>
           </Card>
-        </>
+        </div>
       )}
 
       {selected.length === 1 && (
