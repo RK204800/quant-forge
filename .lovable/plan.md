@@ -1,82 +1,55 @@
 
+# Fix Incorrect Strategy Calculations
 
-# QuantForge — Backtesting Analytics Platform
+## Problem Analysis
 
-A professional-grade backtesting analytics platform for serious quant traders, built with a dark trading-terminal aesthetic.
+After tracing through the code with actual database data, I found **3 critical bugs** in `src/lib/analytics.ts` that cause wrong metrics:
 
----
+### Bug 1: `getDailyReturns()` treats trade-level returns as daily returns
+The function computes returns between consecutive equity curve points, but each point corresponds to a **trade exit** -- not a calendar day. If 5 trades happen over 20 trading days, the code produces 4 "daily" returns spanning 20 actual days. This massively inflates annualized return (e.g., showing ~137% instead of ~12%).
 
-## Phase 1: Core Platform & Analytics Engine
+**Impact**: Annualized Return, Sharpe Ratio, Sortino Ratio, and Calmar Ratio are all wrong.
 
-### 1. Dark Trading Terminal UI Shell
-- Professional dark theme with trading-terminal aesthetic (deep navy/charcoal backgrounds, accent colors for positive/negative PnL)
-- Sidebar navigation: Dashboard, Strategies, Portfolio, Journal, Live Trading, Settings
-- Responsive layout with a top stats bar showing key portfolio metrics
+**Fix**: Resample the equity curve to actual calendar-day intervals before computing returns, so each return genuinely represents one trading day.
 
-### 2. Strategy Upload & Data Normalization
-- Drag-and-drop upload zone supporting multiple formats:
-  - Python Backtrader CSV
-  - NinjaTrader exports
-  - QuantConnect JSON
-  - Generic CSV with column mapping
-- Format auto-detection with preview before import
-- Parsers that normalize all formats into a unified trade/equity data structure
+### Bug 2: `annualizedReturn` calculation doesn't account for actual time span
+Even with resampled daily returns, annualized return should be computed from total return over the actual number of calendar days, not from average daily returns times 252.
 
-### 3. Strategy Analytics Dashboard
-- **Metrics Grid**: Sharpe ratio, Sortino ratio, Calmar ratio, max drawdown, win rate, profit factor, expectancy, total return, annualized return
-- **Equity Curve**: Interactive chart with drawdown overlay
-- **Monthly Returns Heatmap**: Color-coded grid (green/red) by month and year
-- **Trade Distribution**: Histogram of P&L per trade
-- **Rolling Metrics**: 30/60/90-day rolling Sharpe and drawdown charts
-- **Trade-Level Detail Table**: Sortable, filterable list of all trades with entry/exit, P&L, duration
+**Fix**: Calculate annualized return as `(endEquity / startEquity)^(252 / actualTradingDays) - 1` for a proper CAGR-style metric.
 
-### 4. Supabase Backend & Auth
-- Multi-user authentication (email/password signup & login)
-- Database schema: profiles, strategies, trades, equity_curves
-- Row-level security so each user sees only their own data
-- File storage bucket for uploaded backtest files
+### Bug 3: NaN values in chart tooltips
+Console errors show "Received NaN for the children attribute" in the equity curve tooltip. This can occur when the drawdown or equity values produce NaN during rendering (e.g., division by zero edge cases in `maxDrawdown` when peak is 0, or when equity curve has a single point).
 
----
+**Fix**: Add guards in the chart component's tooltip formatter and in the analytics calculations.
 
-## Phase 2: Portfolio Management & Journaling
+## Changes
 
-### 5. Portfolio Builder
-- Combine multiple strategies with custom allocation weights (slider-based)
-- Combined portfolio equity curve and metrics
-- Strategy attribution chart showing each strategy's contribution to returns
-- Correlation matrix between strategies
+### 1. Rewrite `src/lib/analytics.ts` - getDailyReturns and annualized metrics
 
-### 6. Strategy Journal
-- Pre-trade setup logs with rich text notes and image attachments
-- Post-trade review comments linked to specific trades
-- Conviction scoring (1-5) for each journal entry
-- Timeline view of all journal entries per strategy
+- Replace `getDailyReturns()` with a version that interpolates equity to actual calendar days (filling forward on days without trades)
+- Compute `annualizedReturn` using CAGR formula: `(finalEquity / initialEquity)^(365 / totalDays) - 1`
+- Compute volatility from the properly resampled daily returns
+- Add edge-case guards (single trade, same-day trades, zero equity)
 
-### 7. Performance Alerts
-- Configurable alerts: rolling Sharpe drops below threshold, drawdown exceeds limit, win rate degrades
-- Alert dashboard showing triggered and acknowledged alerts
-- Visual indicators on strategy cards when alerts are active
+### 2. Fix `src/components/dashboard/EquityCurve.tsx` - NaN tooltip guard
 
----
+- Add a custom tooltip formatter that handles NaN/undefined values gracefully
+- Ensure drawdown value is always a valid number before rendering
 
-## Phase 3: Live Trading Integration
+### 3. Fix equity curve drawdown calculation in parsers
 
-### 8. Broker API Integration (Alpaca)
-- Secure API key storage via Supabase secrets
-- Live account connection and trade sync via edge functions
-- Live vs. backtested performance comparison view
-- Execution quality tracking: slippage analysis, fill rate
+The parsers (`backtrader.ts`, `tradingview.ts`, `ninjatrader.ts`, `quantconnect.ts`) all use an O(n^2) peak calculation:
+```text
+Math.max(runningEquity, ...equityCurve.map(e => e.equity), runningEquity)
+```
+This is redundant -- `runningEquity` is the current value, not necessarily the peak. Replace with a simple running `peak` variable tracked across iterations.
 
-### 9. Advanced Analytics
-- Stress testing scenarios
-- Monte Carlo simulation of strategy outcomes
-- Benchmark comparison (S&P 500, etc.)
+## Technical Details
 
----
+The resampled daily returns approach:
+1. Sort equity points by timestamp
+2. Create a map of date-string to equity value
+3. Fill forward: for each calendar day between first and last trade, use the most recent known equity
+4. Compute returns from consecutive calendar days
 
-## Design & UX Principles
-- **Dark terminal aesthetic**: Deep backgrounds, monospace fonts for data, green/red PnL colors
-- **Interactive Recharts**: Tooltips, zoom, crosshair on all charts
-- **Information density**: Dashboard designed for multiple monitors, dense data display
-- **Mobile responsive**: Core metrics and equity curves accessible on mobile
-
+This ensures Sharpe/Sortino/Calmar ratios are computed on actual daily frequency data, matching industry-standard methodology.
