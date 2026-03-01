@@ -28,41 +28,55 @@ function downloadSample(content: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+export interface ParsedFile {
+  result: ParseResult;
+  fileName: string;
+}
+
 interface UploadZoneProps {
   strategyId: string;
-  onParsed: (result: ParseResult) => void;
+  onParsed: (files: ParsedFile[]) => void;
 }
 
 export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
   const [dragOver, setDragOver] = useState(false);
-  const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleFile = useCallback(async (file: File) => {
+  const handleFiles = useCallback(async (fileList: FileList) => {
     setError(null);
-    setFileName(file.name);
-    try {
-      const text = await file.text();
-      const result = parseFile(text, file.name, strategyId);
-      if (result.trades.length === 0) {
-        setError("No trades found. Check the file format and column headers.");
-        return;
-      }
-      if (result.warnings.length > 0) {
-        console.warn("Parse warnings:", result.warnings);
-      }
-      onParsed(result);
-    } catch (e) {
-      setError("Failed to parse file. Please check the format.");
+    const files = Array.from(fileList);
+    const results: ParsedFile[] = [];
+    const errors: string[] = [];
+
+    await Promise.all(
+      files.map(async (file) => {
+        try {
+          const text = await file.text();
+          const result = parseFile(text, file.name, strategyId);
+          if (result.trades.length === 0) {
+            errors.push(`${file.name}: No trades found`);
+            return;
+          }
+          results.push({ result, fileName: file.name });
+        } catch {
+          errors.push(`${file.name}: Failed to parse`);
+        }
+      })
+    );
+
+    if (results.length > 0) {
+      onParsed(results);
+    }
+    if (errors.length > 0) {
+      setError(errors.join("; "));
     }
   }, [strategyId, onParsed]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  }, [handleFile]);
+    if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+  }, [handleFiles]);
 
   return (
     <Card className={`bg-card border-2 border-dashed transition-colors cursor-pointer ${dragOver ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground"}`}>
@@ -75,17 +89,18 @@ export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
           const input = document.createElement("input");
           input.type = "file";
           input.accept = ".csv,.json,.txt";
+          input.multiple = true;
           input.onchange = (e) => {
-            const file = (e.target as HTMLInputElement).files?.[0];
-            if (file) handleFile(file);
+            const files = (e.target as HTMLInputElement).files;
+            if (files && files.length > 0) handleFiles(files);
           };
           input.click();
         }}
       >
         <Upload className={`h-10 w-10 ${dragOver ? "text-primary" : "text-muted-foreground"}`} />
         <div className="text-center">
-          <p className="text-sm font-medium text-foreground">Drop backtest file here or click to browse</p>
-          <p className="text-xs text-muted-foreground mt-1">Supports Backtrader CSV, NinjaTrader, QuantConnect JSON, TradingView, Generic CSV</p>
+          <p className="text-sm font-medium text-foreground">Drop backtest files here or click to browse</p>
+          <p className="text-xs text-muted-foreground mt-1">Supports multiple files · Backtrader, NinjaTrader, QuantConnect, TradingView, Generic CSV</p>
           <div className="flex gap-2 mt-2">
             <Button
               type="button"
@@ -107,11 +122,6 @@ export function UploadZone({ strategyId, onParsed }: UploadZoneProps) {
             </Button>
           </div>
         </div>
-        {fileName && !error && (
-          <div className="flex items-center gap-2 text-xs text-primary">
-            <FileText className="h-3 w-3" /> {fileName}
-          </div>
-        )}
         {error && (
           <div className="flex items-center gap-2 text-xs text-loss">
             <AlertCircle className="h-3 w-3" /> {error}

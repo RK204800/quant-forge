@@ -1,39 +1,104 @@
-import { useState } from "react";
-import { UploadZone } from "@/components/upload/UploadZone";
+import { useState, useCallback } from "react";
+import { UploadZone, ParsedFile } from "@/components/upload/UploadZone";
 import { ParseResult } from "@/lib/parsers";
 import { MetricsGrid } from "@/components/dashboard/MetricsGrid";
 import { EquityCurve } from "@/components/dashboard/EquityCurve";
-import { TradesTable } from "@/components/dashboard/TradesTable";
 import { calculateMetrics } from "@/lib/analytics";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Check, Loader2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Check, Loader2, X, ChevronDown, ChevronRight } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSaveStrategy } from "@/hooks/use-strategies";
 
+interface QueueItem {
+  id: string;
+  result: ParseResult;
+  fileName: string;
+  name: string;
+  status: "pending" | "saving" | "saved" | "error";
+  error?: string;
+}
+
+function fileNameToStrategyName(fileName: string): string {
+  return fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 const UploadStrategy = () => {
-  const [result, setResult] = useState<ParseResult | null>(null);
-  const [name, setName] = useState("");
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveProgress, setSaveProgress] = useState({ current: 0, total: 0 });
   const navigate = useNavigate();
   const saveStrategy = useSaveStrategy();
 
-  const handleSave = () => {
-    if (!result || !name) return;
-    saveStrategy.mutate(
-      {
-        name,
-        trades: result.trades,
-        equityCurve: result.equityCurve,
-        format: result.format,
-      },
-      {
-        onSuccess: (strategyId) => {
-          navigate(`/strategies/${strategyId}`);
-        },
-      }
-    );
+  const handleParsed = useCallback((files: ParsedFile[]) => {
+    const newItems: QueueItem[] = files.map((f) => ({
+      id: crypto.randomUUID(),
+      result: f.result,
+      fileName: f.fileName,
+      name: fileNameToStrategyName(f.fileName),
+      status: "pending",
+    }));
+    setQueue((prev) => [...prev, ...newItems]);
+  }, []);
+
+  const removeItem = (id: string) => {
+    setQueue((prev) => prev.filter((item) => item.id !== id));
+    if (expandedId === id) setExpandedId(null);
   };
+
+  const updateName = (id: string, name: string) => {
+    setQueue((prev) => prev.map((item) => (item.id === id ? { ...item, name } : item)));
+  };
+
+  const handleSaveAll = async () => {
+    const pending = queue.filter((item) => item.status === "pending");
+    if (pending.length === 0) return;
+
+    setSaving(true);
+    setSaveProgress({ current: 0, total: pending.length });
+
+    for (let i = 0; i < pending.length; i++) {
+      const item = pending[i];
+      setSaveProgress({ current: i + 1, total: pending.length });
+      setQueue((prev) => prev.map((q) => (q.id === item.id ? { ...q, status: "saving" } : q)));
+
+      try {
+        await new Promise<void>((resolve, reject) => {
+          saveStrategy.mutate(
+            { name: item.name, trades: item.result.trades, equityCurve: item.result.equityCurve, format: item.result.format },
+            {
+              onSuccess: () => {
+                setQueue((prev) => prev.map((q) => (q.id === item.id ? { ...q, status: "saved" } : q)));
+                resolve();
+              },
+              onError: (err) => {
+                setQueue((prev) => prev.map((q) => (q.id === item.id ? { ...q, status: "error", error: err.message } : q)));
+                reject(err);
+              },
+            }
+          );
+        });
+      } catch {
+        // continue saving remaining items
+      }
+    }
+
+    setSaving(false);
+    const updated = queue.map((q) => pending.find((p) => p.id === q.id) ? q : q);
+    // Navigate if all saved successfully
+    setTimeout(() => {
+      setQueue((prev) => {
+        const allDone = prev.every((q) => q.status === "saved");
+        if (allDone) navigate("/strategies");
+        return prev;
+      });
+    }, 500);
+  };
+
+  const pendingCount = queue.filter((q) => q.status === "pending").length;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -41,41 +106,85 @@ const UploadStrategy = () => {
         <Link to="/strategies" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 mb-2">
           <ArrowLeft className="h-3 w-3" /> Back to Strategies
         </Link>
-        <h1 className="text-2xl font-bold font-mono tracking-tight">Upload Strategy</h1>
+        <h1 className="text-2xl font-bold font-mono tracking-tight">Upload Strategies</h1>
         <p className="text-sm text-muted-foreground">Import backtest results from your trading platform</p>
       </div>
 
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Strategy Name</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Input placeholder="e.g. Momentum Alpha v2" value={name} onChange={(e) => setName(e.target.value)} className="max-w-md font-mono" />
-        </CardContent>
-      </Card>
+      <UploadZone strategyId="new" onParsed={handleParsed} />
 
-      <UploadZone strategyId="new" onParsed={setResult} />
+      {queue.length > 0 && (
+        <Card className="bg-card border-border">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-mono font-medium">Queue ({queue.length} {queue.length === 1 ? "file" : "files"})</p>
+              <Button
+                size="sm"
+                className="gap-2"
+                disabled={pendingCount === 0 || saving}
+                onClick={handleSaveAll}
+              >
+                {saving ? (
+                  <><Loader2 className="h-3 w-3 animate-spin" /> Saving {saveProgress.current}/{saveProgress.total}…</>
+                ) : (
+                  <><Check className="h-3 w-3" /> Save All</>
+                )}
+              </Button>
+            </div>
 
-      {result && (
-        <>
-          <div className="flex items-center gap-2 text-sm">
-            <Check className="h-4 w-4 text-profit" />
-            <span className="font-mono">Parsed {result.trades.length} trades from <span className="text-primary">{result.format}</span> format</span>
-            {result.warnings.length > 0 && <span className="text-warning text-xs">({result.warnings.length} warnings)</span>}
-          </div>
+            <div className="space-y-2">
+              {queue.map((item) => {
+                const isExpanded = expandedId === item.id;
+                return (
+                  <div key={item.id} className="border border-border rounded-md overflow-hidden">
+                    <div
+                      className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                    >
+                      {isExpanded ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />}
 
-          <MetricsGrid metrics={calculateMetrics(result.trades, result.equityCurve)} />
-          <EquityCurve data={result.equityCurve} title="Preview: Equity Curve" />
-          <TradesTable trades={result.trades} />
+                      <span className="text-xs text-muted-foreground font-mono truncate w-36 shrink-0">{item.fileName}</span>
+                      <Badge variant="secondary" className="text-[10px] shrink-0">{item.result.format}</Badge>
+                      <span className="text-xs text-muted-foreground shrink-0">{item.result.trades.length} trades</span>
 
-          <Button className="gap-2" disabled={!name || saveStrategy.isPending} onClick={handleSave}>
-            {saveStrategy.isPending ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</>
-            ) : (
-              <><Check className="h-4 w-4" /> Save Strategy</>
-            )}
-          </Button>
-        </>
+                      <div className="flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                        <Input
+                          value={item.name}
+                          onChange={(e) => updateName(item.id, e.target.value)}
+                          className="h-7 text-xs font-mono"
+                          disabled={item.status !== "pending"}
+                        />
+                      </div>
+
+                      {item.status === "saving" && <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />}
+                      {item.status === "saved" && <Check className="h-4 w-4 text-profit shrink-0" />}
+                      {item.status === "error" && (
+                        <span className="text-xs text-loss shrink-0" title={item.error}>Error</span>
+                      )}
+
+                      {item.status === "pending" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
+                          onClick={(e) => { e.stopPropagation(); removeItem(item.id); }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+
+                    {isExpanded && (
+                      <div className="p-4 border-t border-border space-y-4 bg-muted/30">
+                        <MetricsGrid metrics={calculateMetrics(item.result.trades, item.result.equityCurve)} />
+                        <EquityCurve data={item.result.equityCurve} title={`Preview: ${item.name}`} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
