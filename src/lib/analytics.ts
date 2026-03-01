@@ -21,12 +21,15 @@ export function calculateMetrics(trades: Trade[], equityCurve: EquityPoint[]): S
   const dailyReturns = getResampledDailyReturns(equityCurve);
   const annualizedReturn = computeAnnualizedReturn(equityCurve);
 
+  // Dollar-based Sharpe: mean daily PnL / stddev of daily PnL, annualized
+  const meanDailyPnl = dailyReturns.length ? dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length : 0;
   const volatility = dailyReturns.length >= 2 ? stdDev(dailyReturns) * Math.sqrt(TRADING_DAYS) : 0;
-  const sharpeRatio = volatility ? (annualizedReturn - RISK_FREE_RATE) / volatility : 0;
+  const annualizedMeanPnl = meanDailyPnl * TRADING_DAYS;
+  const sharpeRatio = volatility ? annualizedMeanPnl / volatility : 0;
 
   const downsideReturns = dailyReturns.filter((r) => r < 0);
   const downsideDev = downsideReturns.length >= 2 ? stdDev(downsideReturns) * Math.sqrt(TRADING_DAYS) : 0;
-  const sortinoRatio = downsideDev ? (annualizedReturn - RISK_FREE_RATE) / downsideDev : 0;
+  const sortinoRatio = downsideDev ? annualizedMeanPnl / downsideDev : 0;
 
   const maxDD = maxDrawdown(equityCurve);
   const calmarRatio = maxDD ? annualizedReturn / maxDD : 0;
@@ -39,11 +42,11 @@ export function calculateMetrics(trades: Trade[], equityCurve: EquityPoint[]): S
 
   return {
     totalReturn,
-    annualizedReturn: annualizedReturn * 100,
+    annualizedReturn,
     sharpeRatio,
     sortinoRatio,
     calmarRatio,
-    maxDrawdown: maxDD * 100,
+    maxDrawdown: maxDD,
     maxDrawdownDuration: 0,
     winRate: winRate * 100,
     profitFactor,
@@ -288,10 +291,11 @@ export function getMonthlyReturns(equityCurve: EquityPoint[]): MonthlyReturn[] {
     if (!monthly[key]) monthly[key] = { start: p.equity, end: p.equity, year: d.getFullYear(), month: d.getMonth() };
     monthly[key].end = p.equity;
   });
+  // Use absolute dollar difference instead of percentage (safe for $0-start curves)
   return Object.values(monthly).map((m) => ({
     year: m.year,
     month: m.month,
-    return: ((m.end - m.start) / m.start) * 100,
+    return: m.end - m.start,
   }));
 }
 
@@ -318,9 +322,10 @@ function getResampledDailyReturns(curve: EquityPoint[]): number[] {
     dailyEquities.push(lastKnownEquity);
     current.setDate(current.getDate() + 1);
   }
+  // Use absolute dollar differences (safe for $0-start cumulative PnL curves)
   const returns: number[] = [];
   for (let i = 1; i < dailyEquities.length; i++) {
-    if (dailyEquities[i - 1] !== 0) returns.push((dailyEquities[i] - dailyEquities[i - 1]) / dailyEquities[i - 1]);
+    returns.push(dailyEquities[i] - dailyEquities[i - 1]);
   }
   return returns;
 }
@@ -328,25 +333,23 @@ function getResampledDailyReturns(curve: EquityPoint[]): number[] {
 function computeAnnualizedReturn(curve: EquityPoint[]): number {
   if (curve.length < 2) return 0;
   const sorted = [...curve].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  const startEquity = sorted[0].equity;
-  const endEquity = sorted[sorted.length - 1].equity;
-  if (startEquity <= 0 || endEquity <= 0) return 0;
   const totalDays = (new Date(sorted[sorted.length - 1].timestamp).getTime() - new Date(sorted[0].timestamp).getTime()) / (1000 * 60 * 60 * 24);
   if (totalDays < 1) return 0;
-  return Math.pow(endEquity / startEquity, 365 / totalDays) - 1;
+  const totalPnl = sorted[sorted.length - 1].equity - sorted[0].equity;
+  // Annualized dollar PnL per day, returned as raw dollar value
+  return (totalPnl / totalDays) * 365;
 }
 
 function maxDrawdown(curve: EquityPoint[]): number {
   if (curve.length < 1) return 0;
-  let peak = 0;
+  let peak = -Infinity;
   let maxDD = 0;
   curve.forEach((p) => {
     if (p.equity > peak) peak = p.equity;
-    if (peak > 0) {
-      const dd = (peak - p.equity) / peak;
-      if (dd > maxDD) maxDD = dd;
-    }
+    const dd = peak - p.equity;
+    if (dd > maxDD) maxDD = dd;
   });
+  // Return absolute dollar drawdown
   return maxDD;
 }
 

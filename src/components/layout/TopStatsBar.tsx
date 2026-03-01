@@ -47,7 +47,7 @@ export function TopStatsBar() {
       <div className="w-px h-8 bg-border" />
       <Stat label="Total Trades" value={allTrades.length.toString()} icon={<BarChart3 className="h-4 w-4" />} />
       <div className="w-px h-8 bg-border" />
-      <Stat label="Max Drawdown" value={maxDD ? `-${maxDD.toFixed(2)}%` : "—"} icon={<TrendingDown className="h-4 w-4" />} />
+      <Stat label="Max Drawdown" value={maxDD ? `$${Math.abs(maxDD).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"} icon={<TrendingDown className="h-4 w-4" />} />
       <div className="w-px h-8 bg-border" />
       <Stat label="Active Strategies" value={activeStrategies.length.toString()} icon={<Target className="h-4 w-4" />} />
     </div>

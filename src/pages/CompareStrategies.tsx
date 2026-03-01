@@ -35,7 +35,7 @@ const METRIC_ROWS: MetricRow[] = [
   { label: "Sharpe Ratio", key: "sharpeRatio", format: (v) => v.toFixed(2), higherIsBetter: true },
   { label: "Sortino Ratio", key: "sortinoRatio", format: (v) => v.toFixed(2), higherIsBetter: true },
   { label: "Calmar Ratio", key: "calmarRatio", format: (v) => v.toFixed(2), higherIsBetter: true },
-  { label: "Max Drawdown", key: "maxDrawdown", format: (v) => `-${v.toFixed(2)}%`, higherIsBetter: false },
+  { label: "Max Drawdown", key: "maxDrawdown", format: (v) => `$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, higherIsBetter: false },
   { label: "Win Rate", key: "winRate", format: (v) => `${v.toFixed(1)}%`, higherIsBetter: true },
   { label: "Profit Factor", key: "profitFactor", format: (v) => v === Infinity ? "∞" : v.toFixed(2), higherIsBetter: true },
   { label: "Expectancy", key: "expectancy", format: (v) => `$${v.toFixed(2)}`, higherIsBetter: true },

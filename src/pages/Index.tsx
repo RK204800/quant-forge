@@ -90,7 +90,7 @@ const Index = () => {
                     </div>
                     <div>
                       <span className="text-muted-foreground">Max DD</span>
-                      <p className="text-loss font-medium">-{m.maxDrawdown.toFixed(1)}%</p>
+                      <p className="text-loss font-medium">${Math.abs(m.maxDrawdown).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                     </div>
                   </div>
                 </CardContent>

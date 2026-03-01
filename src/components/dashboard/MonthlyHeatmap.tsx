@@ -8,12 +8,12 @@ interface MonthlyHeatmapProps {
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function getColor(value: number): string {
-  if (value > 5) return "bg-profit/80 text-primary-foreground";
-  if (value > 2) return "bg-profit/50 text-foreground";
+  if (value > 500) return "bg-profit/80 text-primary-foreground";
+  if (value > 200) return "bg-profit/50 text-foreground";
   if (value > 0) return "bg-profit/20 text-foreground";
   if (value === 0) return "bg-muted text-muted-foreground";
-  if (value > -2) return "bg-loss/20 text-foreground";
-  if (value > -5) return "bg-loss/50 text-foreground";
+  if (value > -200) return "bg-loss/20 text-foreground";
+  if (value > -500) return "bg-loss/50 text-foreground";
   return "bg-loss/80 text-destructive-foreground";
 }
 
@@ -48,14 +48,14 @@ export function MonthlyHeatmap({ data }: MonthlyHeatmapProps) {
                       <td key={i} className="px-1 py-1">
                         {v !== null ? (
                           <div className={`rounded px-2 py-1 text-center ${getColor(v)}`}>
-                            {v.toFixed(1)}%
+                            ${v.toFixed(0)}
                           </div>
                         ) : <div className="px-2 py-1 text-center text-muted-foreground/30">—</div>}
                       </td>
                     ))}
                     <td className="px-1 py-1">
                       <div className={`rounded px-2 py-1 text-center font-medium ${getColor(ytd)}`}>
-                        {ytd.toFixed(1)}%
+                        ${ytd.toFixed(0)}
                       </div>
                     </td>
                   </tr>
