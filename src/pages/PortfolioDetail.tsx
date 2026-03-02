@@ -13,6 +13,7 @@ import { useState, useMemo } from "react";
 import { ArrowLeft, Plus, X, Pencil, Check, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { CorrelationMatrix } from "@/components/portfolio/CorrelationMatrix";
 
 const PortfolioDetail = () => {
   const { id } = useParams();
@@ -232,6 +233,7 @@ const PortfolioDetail = () => {
             })}
           </div>
           <EquityCurve data={combinedCurve} title="Combined Portfolio Equity" />
+          <CorrelationMatrix strategies={memberStrategies} />
         </>
       )}
 
