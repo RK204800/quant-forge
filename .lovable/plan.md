@@ -1,66 +1,122 @@
 
 
-## Two Features: Manual Re-mapping Button + Portfolio Add/Remove
+## Strategy Page Redesign: Folders + Cleaner Layout
 
-### 1. Manual Column Mapping Trigger
+### Problem
+The Strategies page is cluttered -- the toolbar has 8 buttons crammed into one row, and there's no way to permanently organize strategies into custom folders. The current "Strategy Class" grouping is just a display filter, not a real filing system.
 
-Currently the column mapper only appears when auto-detection fails (0 trades). You need a way to force it open when auto-detection produces incorrect results.
+### Solution Overview
+1. **Add a persistent Folders system** -- user-created folders stored in the database, with drag-and-drop or menu-based assignment
+2. **Clean up the toolbar** -- move bulk actions into a contextual action bar that only appears when strategies are selected
+3. **Integrate folders into the sidebar** -- folders appear in the left filter panel as a tree, replacing the flat strategy class filter as the primary organizer
 
-**Changes:**
+---
 
-**`src/components/upload/UploadZone.tsx`**
-- Add a "Manual Map" button that appears after a file has been successfully parsed and added to the queue
-- Add a new prop/callback or internal state so users can click "Re-map columns" on any queued file
-- Alternatively, add a persistent "Map columns manually" link next to the upload zone that lets users re-upload a file and go straight to the mapper
+### 1. Database: `strategy_folders` Table
 
-**`src/pages/UploadStrategy.tsx`**
-- Add a "Re-map" button on each queue item card (next to the remove X button)
-- When clicked, it stores that item's raw content/headers and opens the ColumnMapper for it
-- On successful re-mapping, replace that queue item's `ParseResult` with the new one
-- This requires storing the raw file content alongside each queue item
+Create a new table to store user folders:
 
-**Implementation detail:**
-- Extend `QueueItem` to include `rawContent?: string` and `headers?: string[]` and `sampleRows?: Record<string, string>[]`
-- When files are parsed (both auto and manual), store the raw content so re-mapping is always available
-- Add a `ColumnMapper` render in `UploadStrategy.tsx` that targets a specific queue item for re-mapping
+- `id` (uuid, PK)
+- `user_id` (uuid, NOT NULL)
+- `name` (text, NOT NULL)
+- `color` (text, default '#666666')
+- `parent_id` (uuid, nullable, self-referencing for nested folders)
+- `sort_order` (integer, default 0)
+- `created_at` (timestamptz)
 
-### 2. Portfolio Builder: Add/Remove Strategies
+Add a `folder_id` column to the `strategies` table (nullable uuid).
 
-Currently the Portfolio page only accepts strategies via URL params set from the Strategies page. You can't add or remove strategies once you're on the page.
+RLS policies: users can only CRUD their own folders.
 
-**Changes:**
+### 2. Cleaner Toolbar Layout
 
-**`src/pages/Portfolio.tsx`**
-- Add local state `selectedIds` initialized from URL params, replacing the read-only `idsParam` approach
-- Add an "Add Strategy" button that opens a dropdown/dialog listing all available strategies not yet in the portfolio
-- Add an "X" remove button on each strategy card to remove it from the portfolio
-- When strategies change, update the URL search params to keep it shareable
-- Show the empty state with an "Add Strategies" button when no strategies are selected
+**Before (8 buttons in one row):**
+Sort | Recompute All | Tag Manager | Select All | Add to Dashboard | Compare | Create Portfolio | Upload
 
-**Specific UI additions:**
-- Each strategy card gets a small X (remove) button in the card header
-- An "Add Strategy" button below the strategy cards grid opens a popover listing available strategies with checkboxes
-- Removing a strategy also cleans up its weight from state
+**After (split into two tiers):**
+
+**Top bar**: Title + strategy count | Sort dropdown | Upload button (primary action)
+
+**Selection action bar** (appears only when 1+ strategies are checked):
+- Selected count indicator
+- Select All / Deselect All
+- Add to Dashboard
+- Compare
+- Create Portfolio
+- Move to Folder (new)
+
+**Overflow menu** (three-dot menu for less-used actions):
+- Recompute All
+- Tag Manager
+
+### 3. Folder Panel in FilterSidebar
+
+Replace the current flat filter list with a folder tree at the top of the sidebar:
+
+```text
+FOLDERS
+  [+] New Folder
+  > All Strategies (count)
+  > Uncategorized (count)
+  > My Momentum Strats (count)
+  > Experimental (count)
+    > Sub-folder (count)
+```
+
+- Clicking a folder filters to only show strategies in that folder
+- "All Strategies" shows everything (default)
+- Right-click or "..." menu on folders for rename/delete/change color
+- The existing class/timeframe/engine filters remain below the folder tree
+
+### 4. Assigning Strategies to Folders
+
+- Each strategy card gets a small folder icon or "Move to..." option via right-click/menu
+- When strategies are selected (checkboxes), the action bar shows "Move to Folder" with a dropdown
+- Strategies default to `folder_id = null` (shown under "Uncategorized")
+
+---
 
 ### Technical Details
 
-**QueueItem extension (UploadStrategy.tsx):**
-```
-interface QueueItem {
-  // ...existing fields
-  rawContent?: string;
-  headers?: string[];
-  sampleRows?: Record<string, string>[];
-}
+**New files:**
+- `src/components/strategies/FolderTree.tsx` -- folder tree component with create/rename/delete inline
+- `src/hooks/use-folders.ts` -- CRUD hooks for folders (useQuery, useMutation)
+
+**Modified files:**
+- `src/pages/Strategies.tsx` -- split toolbar into top bar + contextual selection bar; add folder filtering state; pass `folderId` to save/update
+- `src/components/strategies/FilterSidebar.tsx` -- add FolderTree section above existing filters; accept `selectedFolderId` and `onFolderSelect` props
+- `src/hooks/use-strategies.ts` -- add `folderId` to `useUpdateStrategy` input; filter by folder in `useStrategies` if needed
+- `src/types/index.ts` -- add `StrategyFolder` interface and `folderId?: string` to `Strategy`
+
+**Database migration:**
+```sql
+CREATE TABLE public.strategy_folders (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  name text NOT NULL,
+  color text DEFAULT '#666666',
+  parent_id uuid REFERENCES public.strategy_folders(id) ON DELETE SET NULL,
+  sort_order integer DEFAULT 0,
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.strategy_folders ENABLE ROW LEVEL SECURITY;
+
+-- RLS policies for strategy_folders (SELECT, INSERT, UPDATE, DELETE for own rows)
+
+ALTER TABLE public.strategies
+  ADD COLUMN folder_id uuid REFERENCES public.strategy_folders(id) ON DELETE SET NULL;
 ```
 
-**Portfolio state management:**
-- Replace `useMemo` filter with `useState<string[]>` initialized from URL params
-- Use `useSearchParams` setter to sync URL when selections change
-- Filter `allStrategies` against `selectedIds` for display
+**Folder hooks (`use-folders.ts`):**
+- `useFolders()` -- fetch all user folders
+- `useCreateFolder()` -- create new folder
+- `useUpdateFolder()` -- rename/recolor
+- `useDeleteFolder()` -- delete (strategies move to uncategorized)
+- `useMoveToFolder()` -- update `strategies.folder_id`
 
-**Files to modify:**
-- `src/pages/UploadStrategy.tsx` -- add re-map button per queue item, store raw content, render ColumnMapper for re-mapping
-- `src/components/upload/UploadZone.tsx` -- pass raw content through to parent via `ParsedFile`
-- `src/pages/Portfolio.tsx` -- add/remove strategy UI with local state and URL sync
+**Toolbar restructure:**
+- Primary row: h1 title, subtitle, sort dropdown, upload button
+- Selection bar (conditional): appears below when `compareIds.length > 0`, contains all bulk actions + "Move to Folder" dropdown
+- Recompute All and Tag Manager move to a DropdownMenu (three-dot icon)
 
