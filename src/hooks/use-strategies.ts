@@ -4,6 +4,24 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Strategy, Trade, EquityPoint, StrategyTag } from "@/types";
 import { toast } from "sonner";
 
+const PAGE_SIZE = 5000;
+
+async function fetchAll<T>(
+  buildQuery: (from: number, to: number) => any
+): Promise<T[]> {
+  const allRows: T[] = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await buildQuery(offset, offset + PAGE_SIZE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    offset += PAGE_SIZE;
+  }
+  return allRows;
+}
+
 function mapDbStrategy(row: any, trades: Trade[], equityCurve: EquityPoint[], tags: StrategyTag[] = []): Strategy {
   return {
     id: row.id,
@@ -89,23 +107,24 @@ export function useStrategies() {
 
       const strategyIds = strategiesData.map((s) => s.id);
 
-      const [tradesRes, equityRes, tagMappingsRes] = await Promise.all([
-        supabase.from("trades").select("*").in("strategy_id", strategyIds).order("entry_time").limit(10000),
-        supabase.from("equity_curves").select("*").in("strategy_id", strategyIds).order("timestamp").order("created_at").limit(10000),
+      const [tradesAll, equityAll, tagMappingsRes] = await Promise.all([
+        fetchAll<any>((from, to) =>
+          supabase.from("trades").select("*").in("strategy_id", strategyIds).order("entry_time").range(from, to)
+        ),
+        fetchAll<any>((from, to) =>
+          supabase.from("equity_curves").select("*").in("strategy_id", strategyIds).order("timestamp").order("created_at").range(from, to)
+        ),
         supabase.from("strategy_tag_mapping").select("strategy_id, tag_id, strategy_tags(*)").in("strategy_id", strategyIds),
       ]);
 
-      if (tradesRes.error) throw tradesRes.error;
-      if (equityRes.error) throw equityRes.error;
-
       const tradesByStrategy: Record<string, Trade[]> = {};
-      (tradesRes.data ?? []).forEach((t) => {
+      tradesAll.forEach((t: any) => {
         const mapped = mapDbTrade(t);
         (tradesByStrategy[t.strategy_id] ??= []).push(mapped);
       });
 
       const equityByStrategy: Record<string, EquityPoint[]> = {};
-      (equityRes.data ?? []).forEach((e) => {
+      equityAll.forEach((e: any) => {
         const mapped = mapDbEquityPoint(e);
         (equityByStrategy[e.strategy_id] ??= []).push(mapped);
       });
@@ -142,16 +161,18 @@ export function useStrategy(id: string | undefined) {
     queryFn: async (): Promise<Strategy | null> => {
       if (!user || !id) return null;
 
-      const [stratRes, tradesRes, equityRes, tagMappingsRes] = await Promise.all([
+      const [stratRes, tradesAll, equityAll, tagMappingsRes] = await Promise.all([
         supabase.from("strategies").select("*").eq("id", id).single(),
-        supabase.from("trades").select("*").eq("strategy_id", id).order("entry_time").limit(10000),
-        supabase.from("equity_curves").select("*").eq("strategy_id", id).order("timestamp").order("created_at").limit(10000),
+        fetchAll<any>((from, to) =>
+          supabase.from("trades").select("*").eq("strategy_id", id).order("entry_time").range(from, to)
+        ),
+        fetchAll<any>((from, to) =>
+          supabase.from("equity_curves").select("*").eq("strategy_id", id).order("timestamp").order("created_at").range(from, to)
+        ),
         supabase.from("strategy_tag_mapping").select("strategy_id, tag_id, strategy_tags(*)").eq("strategy_id", id),
       ]);
 
       if (stratRes.error) throw stratRes.error;
-      if (tradesRes.error) throw tradesRes.error;
-      if (equityRes.error) throw equityRes.error;
 
       const tags: StrategyTag[] = [];
       if (tagMappingsRes.data) {
@@ -170,8 +191,8 @@ export function useStrategy(id: string | undefined) {
 
       return mapDbStrategy(
         stratRes.data,
-        (tradesRes.data ?? []).map(mapDbTrade),
-        normalizeCurveToZero((equityRes.data ?? []).map(mapDbEquityPoint)),
+        tradesAll.map(mapDbTrade),
+        normalizeCurveToZero(equityAll.map(mapDbEquityPoint)),
         tags
       );
     },
@@ -322,16 +343,10 @@ export function useRecomputeEquity() {
     mutationFn: async (strategyId: string) => {
       if (!user) throw new Error("Not authenticated");
 
-      const { data: trades, error: tErr } = await supabase
-        .from("trades")
-        .select("*")
-        .eq("strategy_id", strategyId)
-        .order("entry_time")
-        .order("exit_time")
-        .order("id")
-        .limit(10000);
-      if (tErr) throw tErr;
-      if (!trades?.length) throw new Error("No trades found for this strategy");
+      const trades = await fetchAll<any>((from, to) =>
+        supabase.from("trades").select("*").eq("strategy_id", strategyId).order("entry_time").order("exit_time").order("id").range(from, to)
+      );
+      if (!trades.length) throw new Error("No trades found for this strategy");
 
       const { error: dErr } = await supabase
         .from("equity_curves")
@@ -339,7 +354,6 @@ export function useRecomputeEquity() {
         .eq("strategy_id", strategyId);
       if (dErr) throw dErr;
 
-      // Seed at earliest entry_time with equity = 0
       const seedTime = trades[0].entry_time;
       let runningEquity = 0;
       let peak = 0;
@@ -474,16 +488,10 @@ export function useRecomputeAllEquity() {
 
       for (const s of strategiesData) {
         try {
-          const { data: trades, error: tErr } = await supabase
-            .from("trades")
-            .select("*")
-            .eq("strategy_id", s.id)
-            .order("entry_time")
-            .order("exit_time")
-            .order("id")
-            .limit(10000);
-          if (tErr) throw tErr;
-          if (!trades?.length) { failed++; continue; }
+          const trades = await fetchAll<any>((from, to) =>
+            supabase.from("trades").select("*").eq("strategy_id", s.id).order("entry_time").order("exit_time").order("id").range(from, to)
+          );
+          if (!trades.length) { failed++; continue; }
 
           const { error: dErr } = await supabase.from("equity_curves").delete().eq("strategy_id", s.id);
           if (dErr) throw dErr;
