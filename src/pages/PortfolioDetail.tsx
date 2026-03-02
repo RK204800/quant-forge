@@ -149,6 +149,43 @@ const PortfolioDetail = () => {
         </div>
       </div>
 
+      {memberStrategies.length > 0 && (() => {
+        const allTrades = memberStrategies.flatMap((s) => s.trades);
+        const pm = calculateMetrics(allTrades, combinedCurve);
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="bg-card border-border">
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs text-muted-foreground font-mono">TOTAL RETURN</p>
+                <p className={`text-lg font-bold font-mono ${pm.totalReturn >= 0 ? "text-profit" : "text-loss"}`}>
+                  ${pm.totalReturn.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="bg-card border-border">
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs text-muted-foreground font-mono">SHARPE RATIO</p>
+                <p className="text-lg font-bold font-mono">{pm.sharpeRatio.toFixed(2)}</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-card border-border">
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs text-muted-foreground font-mono">MAX DRAWDOWN</p>
+                <p className="text-lg font-bold font-mono text-loss">
+                  ${pm.maxDrawdown.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="bg-card border-border">
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs text-muted-foreground font-mono">WIN RATE</p>
+                <p className="text-lg font-bold font-mono">{(pm.winRate * 100).toFixed(1)}%</p>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
+
       {memberStrategies.length === 0 ? (
         <Card className="bg-card border-border">
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
