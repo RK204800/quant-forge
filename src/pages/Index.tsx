@@ -13,11 +13,14 @@ import { ArrowRight, Activity, Plus, X, Check, MoreVertical, Briefcase, Eye } fr
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
+import { AddToPortfolioDialog } from "@/components/portfolio/AddToPortfolioDialog";
+import { useState } from "react";
 
 const Index = () => {
   const { data: strategies = [], isLoading } = useStrategies();
   const toggleDashboard = useToggleDashboard();
   const navigate = useNavigate();
+  const [portfolioDialogIds, setPortfolioDialogIds] = useState<string[]>([]);
 
   if (isLoading) {
     return (
@@ -127,7 +130,7 @@ const Index = () => {
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-44">
-                          <DropdownMenuItem onClick={() => navigate(`/portfolio?ids=${s.id}`)} className="text-xs font-mono gap-2">
+                          <DropdownMenuItem onClick={() => setPortfolioDialogIds([s.id])} className="text-xs font-mono gap-2">
                             <Briefcase className="h-3.5 w-3.5" /> Add to Portfolio
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => navigate(`/strategies/${s.id}`)} className="text-xs font-mono gap-2">
@@ -193,6 +196,12 @@ const Index = () => {
           <TradesTable trades={primaryStrategy.trades} />
         </>
       )}
+
+      <AddToPortfolioDialog
+        open={portfolioDialogIds.length > 0}
+        onOpenChange={(open) => { if (!open) setPortfolioDialogIds([]); }}
+        strategyIds={portfolioDialogIds}
+      />
     </div>
   );
 };

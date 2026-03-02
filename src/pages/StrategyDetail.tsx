@@ -22,12 +22,15 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, RefreshCw, Briefcase } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { AddToPortfolioDialog } from "@/components/portfolio/AddToPortfolioDialog";
+import { useState } from "react";
 
 const StrategyDetail = () => {
   const { id } = useParams();
   const { data: strategy, isLoading } = useStrategy(id);
   const recomputeEquity = useRecomputeEquity();
   const navigate = useNavigate();
+  const [portfolioDialogOpen, setPortfolioDialogOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -65,7 +68,7 @@ const StrategyDetail = () => {
               variant="outline"
               size="sm"
               className="font-mono text-xs"
-              onClick={() => navigate(`/portfolio?ids=${strategy.id}`)}
+              onClick={() => setPortfolioDialogOpen(true)}
             >
               <Briefcase className="h-3 w-3" />
               Add to Portfolio
@@ -138,6 +141,12 @@ const StrategyDetail = () => {
           <TradesTable trades={strategy.trades} />
         </TabsContent>
       </Tabs>
+
+      <AddToPortfolioDialog
+        open={portfolioDialogOpen}
+        onOpenChange={setPortfolioDialogOpen}
+        strategyIds={strategy ? [strategy.id] : []}
+      />
     </div>
   );
 };

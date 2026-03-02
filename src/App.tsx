@@ -11,6 +11,7 @@ import StrategyDetail from "./pages/StrategyDetail";
 import UploadStrategy from "./pages/UploadStrategy";
 import CompareStrategies from "./pages/CompareStrategies";
 import Portfolio from "./pages/Portfolio";
+import PortfolioDetail from "./pages/PortfolioDetail";
 import Journal from "./pages/Journal";
 import LiveTrading from "./pages/LiveTrading";
 import SettingsPage from "./pages/Settings";
@@ -53,6 +54,7 @@ const AppRoutes = () => (
     <Route path="/strategies/compare" element={<ProtectedRoute><AppLayout><CompareStrategies /></AppLayout></ProtectedRoute>} />
     <Route path="/strategies/:id" element={<ProtectedRoute><AppLayout><StrategyDetail /></AppLayout></ProtectedRoute>} />
     <Route path="/portfolio" element={<ProtectedRoute><AppLayout><Portfolio /></AppLayout></ProtectedRoute>} />
+    <Route path="/portfolio/:id" element={<ProtectedRoute><AppLayout><PortfolioDetail /></AppLayout></ProtectedRoute>} />
     <Route path="/journal" element={<ProtectedRoute><AppLayout><Journal /></AppLayout></ProtectedRoute>} />
     <Route path="/live-trading" element={<ProtectedRoute><AppLayout><LiveTrading /></AppLayout></ProtectedRoute>} />
     <Route path="/settings" element={<ProtectedRoute><AppLayout><SettingsPage /></AppLayout></ProtectedRoute>} />

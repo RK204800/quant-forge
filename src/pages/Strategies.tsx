@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, ArrowUpRight, Pencil, Star, Check, X, GitCompareArrows, RefreshCw, LayoutDashboard, Briefcase, MoreVertical, FolderInput, Tags, Archive, Trash2, RotateCcw } from "lucide-react";
+import { AddToPortfolioDialog } from "@/components/portfolio/AddToPortfolioDialog";
 import { FilterSidebar, FilterState } from "@/components/strategies/FilterSidebar";
 import { SortDropdown, SortField } from "@/components/strategies/SortDropdown";
 import { TagManagerDialog, TagAssigner } from "@/components/strategies/TagManager";
@@ -56,6 +57,7 @@ const Strategies = () => {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [deleteConfirmIds, setDeleteConfirmIds] = useState<string[]>([]);
+  const [portfolioDialogIds, setPortfolioDialogIds] = useState<string[]>([]);
 
   const isArchiveView = selectedFolderId === "archived";
 
@@ -242,8 +244,8 @@ const Strategies = () => {
             </Button>
             <Button
               variant="ghost" size="sm" className="text-xs h-7 gap-1"
-              disabled={compareIds.length < 2}
-              onClick={() => navigate(`/portfolio?ids=${compareIds.join(",")}`)}
+              disabled={compareIds.length < 1}
+              onClick={() => setPortfolioDialogIds(compareIds)}
             >
               <Briefcase className="h-3 w-3" /> Portfolio
             </Button>
@@ -424,6 +426,10 @@ const Strategies = () => {
                                       </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-44">
+                                      <DropdownMenuItem onClick={() => setPortfolioDialogIds([s.id])}>
+                                        <Briefcase className="h-3.5 w-3.5 mr-2" /> Add to Portfolio
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
                                       {isArchiveView ? (
                                         <DropdownMenuItem onClick={() => restoreStrategies.mutate([s.id])}>
                                           <RotateCcw className="h-3.5 w-3.5 mr-2" /> Restore
@@ -470,6 +476,12 @@ const Strategies = () => {
           ))
         )}
       </div>
+
+      <AddToPortfolioDialog
+        open={portfolioDialogIds.length > 0}
+        onOpenChange={(open) => { if (!open) setPortfolioDialogIds([]); }}
+        strategyIds={portfolioDialogIds}
+      />
     </div>
   );
 };
