@@ -55,6 +55,72 @@ export type Database = {
           },
         ]
       }
+      portfolio_strategies: {
+        Row: {
+          created_at: string
+          id: string
+          portfolio_id: string
+          strategy_id: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          portfolio_id: string
+          strategy_id: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          portfolio_id?: string
+          strategy_id?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_strategies_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "portfolios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portfolio_strategies_strategy_id_fkey"
+            columns: ["strategy_id"]
+            isOneToOne: false
+            referencedRelation: "strategies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portfolios: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
