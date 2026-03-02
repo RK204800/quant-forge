@@ -45,6 +45,7 @@ export interface Strategy {
   isFavorite?: boolean;
   showOnDashboard?: boolean;
   tags?: StrategyTag[];
+  folderId?: string | null;
 }
 
 export interface StrategyTag {

@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StrategyTag } from "@/types";
 import { ChevronDown, ChevronRight, Star, TrendingUp, Clock } from "lucide-react";
+import { FolderTree } from "@/components/strategies/FolderTree";
 
 interface FilterState {
   classes: string[];
@@ -24,6 +24,9 @@ interface FilterSidebarProps {
   availableEngines: string[];
   availableAssetClasses: string[];
   tags: StrategyTag[];
+  selectedFolderId: string | null;
+  onFolderSelect: (folderId: string | null) => void;
+  folderCounts: Record<string, number>;
 }
 
 function FilterSection({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
@@ -48,7 +51,7 @@ function CheckboxItem({ label, checked, onChange }: { label: string; checked: bo
   );
 }
 
-export function FilterSidebar({ filters, onFiltersChange, availableClasses, availableTimeframes, availableEngines, availableAssetClasses, tags }: FilterSidebarProps) {
+export function FilterSidebar({ filters, onFiltersChange, availableClasses, availableTimeframes, availableEngines, availableAssetClasses, tags, selectedFolderId, onFolderSelect, folderCounts }: FilterSidebarProps) {
   const toggle = (key: keyof Pick<FilterState, "classes" | "timeframes" | "engines" | "assetClasses" | "statuses" | "tagIds">, val: string) => {
     const arr = filters[key];
     const next = arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val];
@@ -61,6 +64,15 @@ export function FilterSidebar({ filters, onFiltersChange, availableClasses, avai
 
   return (
     <div className="w-52 shrink-0 space-y-3">
+      {/* Folder tree */}
+      <FolderTree
+        selectedFolderId={selectedFolderId}
+        onFolderSelect={onFolderSelect}
+        strategyCounts={folderCounts}
+      />
+
+      <div className="border-b border-border" />
+
       <p className="text-xs font-mono font-semibold uppercase tracking-wider text-foreground">Filters</p>
 
       {/* Quick filters */}

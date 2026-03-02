@@ -25,6 +25,7 @@ function mapDbStrategy(row: any, trades: Trade[], equityCurve: EquityPoint[], ta
     isFavorite: row.is_favorite ?? false,
     showOnDashboard: row.show_on_dashboard ?? true,
     tags,
+    folderId: row.folder_id ?? null,
   };
 }
 
@@ -277,13 +278,14 @@ export function useUpdateStrategy() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { id: string; name?: string; strategyClass?: string; isFavorite?: boolean; showOnDashboard?: boolean; description?: string }) => {
+    mutationFn: async (input: { id: string; name?: string; strategyClass?: string; isFavorite?: boolean; showOnDashboard?: boolean; description?: string; folderId?: string | null }) => {
       const updates: Record<string, any> = {};
       if (input.name !== undefined) updates.name = input.name;
       if (input.strategyClass !== undefined) updates.strategy_class = input.strategyClass;
       if (input.isFavorite !== undefined) updates.is_favorite = input.isFavorite;
       if (input.showOnDashboard !== undefined) updates.show_on_dashboard = input.showOnDashboard;
       if (input.description !== undefined) updates.description = input.description;
+      if (input.folderId !== undefined) updates.folder_id = input.folderId;
 
       const { error } = await supabase.from("strategies").update(updates).eq("id", input.id);
       if (error) throw error;

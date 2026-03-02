@@ -8,7 +8,7 @@ import { Tags, Plus, X } from "lucide-react";
 
 const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899", "#666666"];
 
-export function TagManagerDialog() {
+export function TagManagerDialog({ open, onOpenChange }: { open?: boolean; onOpenChange?: (open: boolean) => void } = {}) {
   const { data: tags = [] } = useTags();
   const createTag = useCreateTag();
   const deleteTag = useDeleteTag();
@@ -22,12 +22,14 @@ export function TagManagerDialog() {
   };
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
-          <Tags className="h-3 w-3" /> Tags
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open === undefined && (
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+            <Tags className="h-3 w-3" /> Tags
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="font-mono text-sm">Manage Tags</DialogTitle>

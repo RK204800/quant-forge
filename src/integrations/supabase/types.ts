@@ -89,6 +89,7 @@ export type Database = {
           broker: string | null
           created_at: string
           description: string | null
+          folder_id: string | null
           id: string
           is_favorite: boolean | null
           name: string
@@ -107,6 +108,7 @@ export type Database = {
           broker?: string | null
           created_at?: string
           description?: string | null
+          folder_id?: string | null
           id?: string
           is_favorite?: boolean | null
           name: string
@@ -125,6 +127,7 @@ export type Database = {
           broker?: string | null
           created_at?: string
           description?: string | null
+          folder_id?: string | null
           id?: string
           is_favorite?: boolean | null
           name?: string
@@ -137,7 +140,53 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "strategies_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "strategy_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      strategy_folders: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          sort_order: number | null
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          parent_id?: string | null
+          sort_order?: number | null
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          parent_id?: string | null
+          sort_order?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strategy_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "strategy_folders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       strategy_tag_mapping: {
         Row: {
