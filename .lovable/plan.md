@@ -1,109 +1,149 @@
 
 
-## Persistent Portfolio System
+## World-Class Portfolio Risk Management Suite
 
 ### Overview
-Transform the current ephemeral portfolio builder into a full persistent workflow. Users can create named portfolios, save them to the database, and add strategies to specific portfolios from anywhere in the app (Dashboard cards, Strategy Detail, Strategies page).
+Add a comprehensive "Portfolio Risk Assessment" tab/section to the Portfolio Detail page with institutional-grade risk management analytics. This is a pure client-side computation layer -- no database changes needed.
 
-### Database Changes
+### New File: `src/lib/portfolio-analytics.ts`
 
-**New table: `portfolios`**
-- `id` (uuid, PK, default gen_random_uuid())
-- `user_id` (uuid, NOT NULL)
-- `name` (text, NOT NULL)
-- `description` (text, default '')
-- `created_at` (timestamptz, default now())
-- `updated_at` (timestamptz, default now())
+A dedicated analytics engine for portfolio-level risk computations containing all the functions below.
 
-**New table: `portfolio_strategies`**
-- `id` (uuid, PK, default gen_random_uuid())
-- `portfolio_id` (uuid, NOT NULL, FK -> portfolios.id ON DELETE CASCADE)
-- `strategy_id` (uuid, NOT NULL, FK -> strategies.id ON DELETE CASCADE)
-- `weight` (numeric, NOT NULL, default 0)
-- `created_at` (timestamptz, default now())
-- UNIQUE constraint on (portfolio_id, strategy_id)
+#### 1. Kelly Criterion Position Sizing
+- **Per-strategy Kelly fraction**: `f* = W - (1-W)/R` where W = win rate, R = avg win / avg loss
+- **Half-Kelly** (industry standard conservative): `f*/2`
+- **Portfolio-level Kelly**: Optimal fraction adjusted for correlation between strategies
+- Display recommended allocation vs current allocation with a comparison table
 
-Both tables get RLS policies restricting all operations to `auth.uid() = user_id` (for portfolios) and ownership via join to portfolios (for portfolio_strategies).
+#### 2. Conservative Drawdown Stress Test (MAE-based)
+- For each strategy, find the worst MAE across all trades (or estimated MAE)
+- **Concurrent worst-case**: Sum of all strategies' worst MAEs simultaneously (assume all open positions hit max adverse excursion at once)
+- **Weighted worst-case**: Apply portfolio weights to the concurrent MAE sum
+- Show as dollar amount and as percentage of a user-configurable account size (default $100,000)
+- Display per-strategy MAE contribution breakdown
 
-An `update_updated_at` trigger on portfolios to keep `updated_at` current.
+#### 3. Portfolio Heat / Margin of Safety
+- **Portfolio Heat** = sum of all position risks (worst-case stop distances) as % of capital
+- Risk budget consumed: how much of a configurable max-risk threshold (e.g. 6% of capital) is used
+- Traffic-light indicator: Green (<50% budget), Yellow (50-80%), Red (>80%)
 
-### New Hooks (`src/hooks/use-portfolios.ts`)
+#### 4. Diversification Score
+- Uses existing correlation matrix computation (Pearson)
+- **Diversification Ratio** = weighted sum of individual volatilities / portfolio volatility
+- Higher ratio = better diversification
+- Score normalized 0-100 with interpretation labels (Poor / Fair / Good / Excellent)
 
-- `usePortfolios()` -- fetches all user portfolios with strategy counts
-- `usePortfolio(id)` -- fetches single portfolio with its strategies and weights
-- `useCreatePortfolio()` -- creates a new portfolio, returns the new ID
-- `useUpdatePortfolio()` -- updates name/description
-- `useDeletePortfolio()` -- deletes a portfolio
-- `useAddToPortfolio()` -- adds one or more strategy IDs to a portfolio (with default equal weights)
-- `useRemoveFromPortfolio()` -- removes a strategy from a portfolio
-- `useUpdateWeight()` -- updates a single strategy's weight in a portfolio
+#### 5. Tail Risk Analysis (CVaR / Expected Shortfall)
+- **Value at Risk (VaR)** at 95% and 99% confidence from combined daily PnL distribution
+- **Conditional VaR (CVaR)**: Average loss in the worst 5% of days
+- Per-strategy contribution to portfolio tail risk
 
-### "Add to Portfolio" Dialog Component (`src/components/portfolio/AddToPortfolioDialog.tsx`)
+#### 6. Portfolio Monte Carlo
+- Run Monte Carlo on the combined portfolio trade stream (interleaved by date, weighted)
+- Show portfolio-level percentile equity paths, risk of ruin, and max drawdown distribution
+- Reuses existing `runMonteCarlo` logic with combined PnL stream
 
-A reusable dialog that:
-1. Shows a list of existing portfolios to pick from
-2. Has a "Create New Portfolio" option at the top with an inline name input
-3. Accepts `strategyIds: string[]` as a prop
-4. On select: adds the strategies to that portfolio, shows a toast with a link to the portfolio
+#### 7. Concentration Risk
+- **Herfindahl-Hirschman Index (HHI)** of portfolio weights
+- Flag if any single strategy exceeds configurable threshold (e.g. 40%)
+- Instrument overlap detection: count shared instruments across strategies
 
-This dialog is used from:
-- Dashboard card dropdown menu ("Add to Portfolio" item)
-- Strategy Detail page ("Add to Portfolio" button)
-- Strategies page per-card action menu
+#### 8. Portfolio Stability Score
+- Composite score (0-100) combining:
+  - Diversification ratio (25%)
+  - Kelly alignment (25%) -- how close current weights are to optimal
+  - Drawdown resilience (25%) -- worst-case MAE vs capital
+  - Tail risk grade (25%) -- CVaR relative to expected return
+- Letter grade: A+ through F
 
-### Portfolio List Page (`src/pages/Portfolio.tsx` -- reworked)
+### New Component: `src/components/portfolio/PortfolioRiskAssessment.tsx`
 
-The `/portfolio` route becomes a list of saved portfolios:
-- Shows all portfolios as cards with name, strategy count, creation date
-- "Create Portfolio" button opens a dialog to name a new portfolio
-- Each card links to `/portfolio/:id`
+A tabbed or sectioned component that renders all the above analytics:
 
-### Portfolio Detail Page (`src/pages/PortfolioDetail.tsx` -- new)
+```text
++------------------------------------------------------+
+| PORTFOLIO RISK ASSESSMENT                            |
+|------------------------------------------------------|
+| [Overall Score: A-  (82/100)]                        |
+|                                                      |
+| +-- Risk Summary Cards (4-col grid) ---------------+ |
+| | Kelly Optimal | Worst-Case DD | VaR 95% | Heat   | |
+| +--------------------------------------------------+ |
+|                                                      |
+| +-- Kelly Position Sizing Table -------------------+ |
+| | Strategy | WinRate | R:R | Kelly | Half-Kelly |  | |
+| |          |         |     | Curr% | Suggest%   |  | |
+| +--------------------------------------------------+ |
+|                                                      |
+| +-- Stress Test (MAE Concurrent) ------------------+ |
+| | Strategy | Worst MAE | Weight | Contrib          | |
+| | TOTAL    | $X,XXX    | ---    | $X,XXX           | |
+| +--------------------------------------------------+ |
+|                                                      |
+| +-- Tail Risk (VaR / CVaR) -----------------------+ | 
+| | VaR 95%: $X,XXX  |  CVaR 95%: $X,XXX           | |
+| | VaR 99%: $X,XXX  |  CVaR 99%: $X,XXX           | |
+| +--------------------------------------------------+ |
+|                                                      |
+| +-- Concentration & Diversification ---------------+ |
+| | HHI: 0.XX  |  Div Ratio: X.XX  |  Score: XX/100 | |
+| | Instrument Overlap Matrix                        | |
+| +--------------------------------------------------+ |
+|                                                      |
+| +-- Portfolio Monte Carlo -------------------------+ |
+| | (Reuses MonteCarloChart with combined PnLs)      | |
+| +--------------------------------------------------+ |
++------------------------------------------------------+
+```
 
-The `/portfolio/:id` route shows the full builder for a specific saved portfolio:
-- Portfolio name displayed as an editable header
-- Strategy cards with weight sliders (persisted on change)
-- Add/remove strategies
-- Combined equity curve
-- All the current builder logic, but reading from and writing to the database
+### Integration into PortfolioDetail.tsx
 
-### Routing Changes (`src/App.tsx`)
+- Add the `<PortfolioRiskAssessment>` component after the correlation matrix
+- Pass `memberStrategies` (with trades, equity curves, weights) and an `accountSize` prop (default 100k, editable inline)
+- Only renders when 1+ strategies are in the portfolio
 
-- `/portfolio` -- portfolio list
-- `/portfolio/:id` -- portfolio detail/builder
+### Files to Create
+- `src/lib/portfolio-analytics.ts` -- all computation functions
+- `src/components/portfolio/PortfolioRiskAssessment.tsx` -- full UI component
 
-### Sidebar Navigation
-
-No changes needed -- the existing "Portfolio" link at `/portfolio` continues to work, now showing the list.
-
-### Dashboard & Strategy Detail Updates
-
-- Dashboard card dropdown: replace the current `navigate('/portfolio?ids=...')` with opening the `AddToPortfolioDialog`
-- Strategy Detail: replace the navigate button with opening `AddToPortfolioDialog`
-
-### Files to create
-- `src/hooks/use-portfolios.ts`
-- `src/components/portfolio/AddToPortfolioDialog.tsx`
-- `src/pages/PortfolioDetail.tsx`
-
-### Files to modify
-- `src/pages/Portfolio.tsx` -- rewrite as portfolio list
-- `src/App.tsx` -- add `/portfolio/:id` route
-- `src/pages/Index.tsx` -- use AddToPortfolioDialog instead of direct navigate
-- `src/pages/StrategyDetail.tsx` -- use AddToPortfolioDialog instead of direct navigate
-- `src/pages/Strategies.tsx` -- add "Add to Portfolio" in per-card menu
+### Files to Modify
+- `src/pages/PortfolioDetail.tsx` -- import and render the new component
 
 ### Technical Details
 
+**Kelly Criterion formula:**
 ```text
-portfolios              portfolio_strategies
-+--------+             +------------------+
-| id     |<---+        | id               |
-| user_id|    +--------| portfolio_id     |
-| name   |             | strategy_id      |
-| desc   |             | weight           |
-+--------+             +------------------+
+f* = W - (1 - W) / R
+where W = win rate (decimal), R = avgWin / avgLoss
+Half-Kelly = f* / 2
 ```
 
-Weights are stored as percentages (0-100). The combined equity curve calculation stays client-side, using the same logic currently in Portfolio.tsx but reading strategies from the portfolio's membership list.
+**Diversification Ratio:**
+```text
+DR = (sum of w_i * sigma_i) / sigma_portfolio
+where sigma_portfolio = sqrt(w' * C * w), C = covariance matrix
+```
+
+**CVaR calculation:**
+```text
+Sort daily PnLs ascending
+VaR_95 = PnL at 5th percentile
+CVaR_95 = mean of all PnLs below VaR_95
+```
+
+**HHI (concentration):**
+```text
+HHI = sum(w_i^2) where w_i are normalized weights
+Range: 1/n (perfect diversification) to 1.0 (single strategy)
+```
+
+**Composite Portfolio Score weighting:**
+```text
+Score = 0.25 * diversification_score
+      + 0.25 * kelly_alignment_score
+      + 0.25 * drawdown_resilience_score
+      + 0.25 * tail_risk_grade
+```
+
+All computations are client-side using existing trade data -- no API calls or database changes required.
 
