@@ -1,122 +1,40 @@
 
 
-## Strategy Page Redesign: Folders + Cleaner Layout
+## Remove Row Limits on Strategy Data
 
 ### Problem
-The Strategies page is cluttered -- the toolbar has 8 buttons crammed into one row, and there's no way to permanently organize strategies into custom folders. The current "Strategy Class" grouping is just a display filter, not a real filing system.
+Database read queries cap trade and equity curve fetches at 10,000 rows. For the strategies list view, this 10,000 limit is shared across ALL strategies -- meaning with 18+ strategies, individual strategies may have their data silently truncated. Individual strategy detail views also cap at 10,000 trades.
 
-### Solution Overview
-1. **Add a persistent Folders system** -- user-created folders stored in the database, with drag-and-drop or menu-based assignment
-2. **Clean up the toolbar** -- move bulk actions into a contextual action bar that only appears when strategies are selected
-3. **Integrate folders into the sidebar** -- folders appear in the left filter panel as a tree, replacing the flat strategy class filter as the primary organizer
+### Changes
 
----
+**File: `src/hooks/use-strategies.ts`**
 
-### 1. Database: `strategy_folders` Table
+Replace the single bulk query approach with paginated fetching that retrieves all rows:
 
-Create a new table to store user folders:
+1. **Create a `fetchAll` helper function** that paginates through results using Supabase's `range()` method (fetching in chunks of 5,000) until all rows are retrieved. This removes the hard 10,000 cap.
 
-- `id` (uuid, PK)
-- `user_id` (uuid, NOT NULL)
-- `name` (text, NOT NULL)
-- `color` (text, default '#666666')
-- `parent_id` (uuid, nullable, self-referencing for nested folders)
-- `sort_order` (integer, default 0)
-- `created_at` (timestamptz)
+2. **Update `useStrategies` (line 92-94)**: Replace `.limit(10000)` calls with the `fetchAll` helper for both trades and equity_curves queries.
 
-Add a `folder_id` column to the `strategies` table (nullable uuid).
+3. **Update `useStrategy` (line 147-148)**: Same change for the single-strategy detail query.
 
-RLS policies: users can only CRUD their own folders.
+4. **Update `useRecomputeStrategy` (line 330-332)**: Remove `.limit(10000)` and use `fetchAll`.
 
-### 2. Cleaner Toolbar Layout
-
-**Before (8 buttons in one row):**
-Sort | Recompute All | Tag Manager | Select All | Add to Dashboard | Compare | Create Portfolio | Upload
-
-**After (split into two tiers):**
-
-**Top bar**: Title + strategy count | Sort dropdown | Upload button (primary action)
-
-**Selection action bar** (appears only when 1+ strategies are checked):
-- Selected count indicator
-- Select All / Deselect All
-- Add to Dashboard
-- Compare
-- Create Portfolio
-- Move to Folder (new)
-
-**Overflow menu** (three-dot menu for less-used actions):
-- Recompute All
-- Tag Manager
-
-### 3. Folder Panel in FilterSidebar
-
-Replace the current flat filter list with a folder tree at the top of the sidebar:
-
-```text
-FOLDERS
-  [+] New Folder
-  > All Strategies (count)
-  > Uncategorized (count)
-  > My Momentum Strats (count)
-  > Experimental (count)
-    > Sub-folder (count)
-```
-
-- Clicking a folder filters to only show strategies in that folder
-- "All Strategies" shows everything (default)
-- Right-click or "..." menu on folders for rename/delete/change color
-- The existing class/timeframe/engine filters remain below the folder tree
-
-### 4. Assigning Strategies to Folders
-
-- Each strategy card gets a small folder icon or "Move to..." option via right-click/menu
-- When strategies are selected (checkboxes), the action bar shows "Move to Folder" with a dropdown
-- Strategies default to `folder_id = null` (shown under "Uncategorized")
-
----
+5. **Update `useRecomputeAllStrategies` (line 482-484)**: Same change.
 
 ### Technical Details
 
-**New files:**
-- `src/components/strategies/FolderTree.tsx` -- folder tree component with create/rename/delete inline
-- `src/hooks/use-folders.ts` -- CRUD hooks for folders (useQuery, useMutation)
-
-**Modified files:**
-- `src/pages/Strategies.tsx` -- split toolbar into top bar + contextual selection bar; add folder filtering state; pass `folderId` to save/update
-- `src/components/strategies/FilterSidebar.tsx` -- add FolderTree section above existing filters; accept `selectedFolderId` and `onFolderSelect` props
-- `src/hooks/use-strategies.ts` -- add `folderId` to `useUpdateStrategy` input; filter by folder in `useStrategies` if needed
-- `src/types/index.ts` -- add `StrategyFolder` interface and `folderId?: string` to `Strategy`
-
-**Database migration:**
-```sql
-CREATE TABLE public.strategy_folders (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  name text NOT NULL,
-  color text DEFAULT '#666666',
-  parent_id uuid REFERENCES public.strategy_folders(id) ON DELETE SET NULL,
-  sort_order integer DEFAULT 0,
-  created_at timestamptz DEFAULT now()
-);
-
-ALTER TABLE public.strategy_folders ENABLE ROW LEVEL SECURITY;
-
--- RLS policies for strategy_folders (SELECT, INSERT, UPDATE, DELETE for own rows)
-
-ALTER TABLE public.strategies
-  ADD COLUMN folder_id uuid REFERENCES public.strategy_folders(id) ON DELETE SET NULL;
+The `fetchAll` helper:
+```text
+async function fetchAll(query): Promise<rows[]>
+  - Uses .range(offset, offset + PAGE_SIZE - 1) in a loop
+  - Continues until a page returns fewer rows than PAGE_SIZE
+  - Concatenates all pages and returns the full dataset
+  - PAGE_SIZE = 5000 (well under Supabase's max response size)
 ```
 
-**Folder hooks (`use-folders.ts`):**
-- `useFolders()` -- fetch all user folders
-- `useCreateFolder()` -- create new folder
-- `useUpdateFolder()` -- rename/recolor
-- `useDeleteFolder()` -- delete (strategies move to uncategorized)
-- `useMoveToFolder()` -- update `strategies.folder_id`
-
-**Toolbar restructure:**
-- Primary row: h1 title, subtitle, sort dropdown, upload button
-- Selection bar (conditional): appears below when `compareIds.length > 0`, contains all bulk actions + "Move to Folder" dropdown
-- Recompute All and Tag Manager move to a DropdownMenu (three-dot icon)
+This approach:
+- Removes all artificial row limits
+- Keeps the batch insert size at 500 (this is fine -- it's just chunking, not limiting)
+- Handles strategies with any number of trades
+- No database migration needed
 
