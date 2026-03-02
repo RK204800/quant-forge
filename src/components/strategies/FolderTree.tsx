@@ -3,17 +3,18 @@ import { useFolders, useCreateFolder, useUpdateFolder, useDeleteFolder, useMoveT
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { FolderOpen, FolderPlus, MoreHorizontal, Pencil, Trash2, Check, X } from "lucide-react";
+import { FolderOpen, FolderPlus, MoreHorizontal, Pencil, Trash2, Check, X, Archive } from "lucide-react";
 
 interface FolderTreeProps {
-  selectedFolderId: string | null; // null = "All", "uncategorized" = no folder
+  selectedFolderId: string | null;
   onFolderSelect: (folderId: string | null) => void;
-  strategyCounts: Record<string, number>; // folderId -> count, "uncategorized" -> count, "all" -> total
+  strategyCounts: Record<string, number>;
+  onArchiveDrop?: (strategyIds: string[]) => void;
 }
 
 const FOLDER_COLORS = ["#666666", "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899"];
 
-export function FolderTree({ selectedFolderId, onFolderSelect, strategyCounts }: FolderTreeProps) {
+export function FolderTree({ selectedFolderId, onFolderSelect, strategyCounts, onArchiveDrop }: FolderTreeProps) {
   const { data: folders = [] } = useFolders();
   const createFolder = useCreateFolder();
   const updateFolder = useUpdateFolder();
@@ -39,13 +40,17 @@ export function FolderTree({ selectedFolderId, onFolderSelect, strategyCounts }:
     setEditingId(null);
   };
 
-  const handleDrop = (e: DragEvent, folderId: string | null) => {
+  const handleDrop = (e: DragEvent, folderId: string | null, archive?: boolean) => {
     e.preventDefault();
     setDragOverId(null);
     try {
       const data = JSON.parse(e.dataTransfer.getData("application/strategy-ids"));
       if (Array.isArray(data) && data.length > 0) {
-        moveToFolder.mutate({ strategyIds: data, folderId });
+        if (archive) {
+          onArchiveDrop?.(data);
+        } else {
+          moveToFolder.mutate({ strategyIds: data, folderId });
+        }
       }
     } catch {}
   };
@@ -119,6 +124,19 @@ export function FolderTree({ selectedFolderId, onFolderSelect, strategyCounts }:
           onDragLeave={handleDragLeave}
         />
       ))}
+
+      {/* Archived virtual folder */}
+      <button
+        onClick={() => onFolderSelect("archived")}
+        onDrop={(e) => handleDrop(e, null, true)}
+        onDragOver={(e) => handleDragOver(e, "archived")}
+        onDragLeave={handleDragLeave}
+        className={`w-full flex items-center gap-2 text-xs px-2 py-1.5 rounded-md transition-colors mt-2 ${dragOverId === "archived" ? "bg-primary/20 ring-2 ring-primary/50" : ""} ${isSelected("archived") ? "bg-accent text-accent-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"}`}
+      >
+        <Archive className="h-3.5 w-3.5 shrink-0 opacity-60" />
+        <span className="truncate flex-1 text-left">Archived</span>
+        <span className="text-[10px] opacity-70">{strategyCounts.archived ?? 0}</span>
+      </button>
 
       {/* Inline create */}
       {isCreating && (

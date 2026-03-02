@@ -1,5 +1,5 @@
 import { useState, useMemo, DragEvent } from "react";
-import { useStrategies, useUpdateStrategy, useToggleFavorite, useToggleDashboard, useTags, useRecomputeAllEquity } from "@/hooks/use-strategies";
+import { useStrategies, useUpdateStrategy, useToggleFavorite, useToggleDashboard, useTags, useRecomputeAllEquity, useArchiveStrategies, useRestoreStrategies, useDeleteStrategies } from "@/hooks/use-strategies";
 import { useFolders, useMoveToFolder } from "@/hooks/use-folders";
 import { calculateMetrics } from "@/lib/analytics";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, ArrowUpRight, Pencil, Star, Check, X, GitCompareArrows, RefreshCw, LayoutDashboard, Briefcase, MoreVertical, FolderInput, Tags } from "lucide-react";
+import { Plus, ArrowUpRight, Pencil, Star, Check, X, GitCompareArrows, RefreshCw, LayoutDashboard, Briefcase, MoreVertical, FolderInput, Tags, Archive, Trash2, RotateCcw } from "lucide-react";
 import { FilterSidebar, FilterState } from "@/components/strategies/FilterSidebar";
 import { SortDropdown, SortField } from "@/components/strategies/SortDropdown";
 import { TagManagerDialog, TagAssigner } from "@/components/strategies/TagManager";
@@ -39,6 +40,9 @@ const Strategies = () => {
   const toggleFavorite = useToggleFavorite();
   const recomputeAll = useRecomputeAllEquity();
   const moveToFolder = useMoveToFolder();
+  const archiveStrategies = useArchiveStrategies();
+  const restoreStrategies = useRestoreStrategies();
+  const deleteStrategies = useDeleteStrategies();
   const navigate = useNavigate();
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -51,6 +55,9 @@ const Strategies = () => {
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
+  const [deleteConfirmIds, setDeleteConfirmIds] = useState<string[]>([]);
+
+  const isArchiveView = selectedFolderId === "archived";
 
   const toggleCompare = (id: string) => {
     setCompareIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
@@ -62,10 +69,15 @@ const Strategies = () => {
     [strategies]
   );
 
-  // Folder counts
+  // Folder counts — exclude archived from "all" and "uncategorized"
   const folderCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: strategies.length, uncategorized: 0 };
+    const counts: Record<string, number> = { all: 0, uncategorized: 0, archived: 0 };
     strategies.forEach((s) => {
+      if (s.status === "archived") {
+        counts.archived++;
+        return;
+      }
+      counts.all++;
       if (!s.folderId) {
         counts.uncategorized++;
       } else {
@@ -83,9 +95,10 @@ const Strategies = () => {
 
   // Filter by folder first
   const folderFiltered = useMemo(() => {
-    if (selectedFolderId === null) return strategiesWithMetrics; // All
-    if (selectedFolderId === "uncategorized") return strategiesWithMetrics.filter(({ strategy: s }) => !s.folderId);
-    return strategiesWithMetrics.filter(({ strategy: s }) => s.folderId === selectedFolderId);
+    if (selectedFolderId === "archived") return strategiesWithMetrics.filter(({ strategy: s }) => s.status === "archived");
+    if (selectedFolderId === null) return strategiesWithMetrics.filter(({ strategy: s }) => s.status !== "archived");
+    if (selectedFolderId === "uncategorized") return strategiesWithMetrics.filter(({ strategy: s }) => !s.folderId && s.status !== "archived");
+    return strategiesWithMetrics.filter(({ strategy: s }) => s.folderId === selectedFolderId && s.status !== "archived");
   }, [strategiesWithMetrics, selectedFolderId]);
 
   // Then apply sidebar filters
@@ -135,6 +148,10 @@ const Strategies = () => {
 
   const hasSelection = compareIds.length > 0;
 
+  const handleArchiveDrop = (ids: string[]) => {
+    archiveStrategies.mutate(ids);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -156,13 +173,16 @@ const Strategies = () => {
         selectedFolderId={selectedFolderId}
         onFolderSelect={setSelectedFolderId}
         folderCounts={folderCounts}
+        onArchiveDrop={handleArchiveDrop}
       />
 
       <div className="flex-1 space-y-4 min-w-0">
         {/* Top bar: Title + Sort + Overflow + Upload */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold font-mono tracking-tight">Strategies</h1>
+            <h1 className="text-2xl font-bold font-mono tracking-tight">
+              {isArchiveView ? "Archived Strategies" : "Strategies"}
+            </h1>
             <p className="text-sm text-muted-foreground">{sorted.length} of {strategies.length} strategies</p>
           </div>
           <div className="flex items-center gap-2">
@@ -201,9 +221,9 @@ const Strategies = () => {
             <span className="text-xs font-mono font-medium text-foreground mr-2">{compareIds.length} selected</span>
             <Button
               variant="ghost" size="sm" className="text-xs h-7"
-              onClick={() => setCompareIds(compareIds.length === strategies.length ? [] : strategies.map((s) => s.id))}
+              onClick={() => setCompareIds(compareIds.length === sorted.length ? [] : sorted.map(({ strategy }) => strategy.id))}
             >
-              {compareIds.length === strategies.length ? "Deselect All" : "Select All"}
+              {compareIds.length === sorted.length ? "Deselect All" : "Select All"}
             </Button>
             <div className="h-4 w-px bg-border" />
             <Button variant="ghost" size="sm" className="text-xs h-7 gap-1"
@@ -249,6 +269,30 @@ const Strategies = () => {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            <div className="h-4 w-px bg-border" />
+
+            {/* Archive / Restore */}
+            {isArchiveView ? (
+              <Button variant="ghost" size="sm" className="text-xs h-7 gap-1"
+                onClick={() => { restoreStrategies.mutate(compareIds); setCompareIds([]); }}
+              >
+                <RotateCcw className="h-3 w-3" /> Restore
+              </Button>
+            ) : (
+              <Button variant="ghost" size="sm" className="text-xs h-7 gap-1"
+                onClick={() => { archiveStrategies.mutate(compareIds); setCompareIds([]); }}
+              >
+                <Archive className="h-3 w-3" /> Archive
+              </Button>
+            )}
+
+            {/* Delete permanently */}
+            <Button variant="ghost" size="sm" className="text-xs h-7 gap-1 text-destructive hover:text-destructive"
+              onClick={() => setDeleteConfirmIds(compareIds)}
+            >
+              <Trash2 className="h-3 w-3" /> Delete
+            </Button>
+
             <Button variant="ghost" size="sm" className="text-xs h-7 ml-auto" onClick={() => setCompareIds([])}>
               <X className="h-3 w-3" />
             </Button>
@@ -257,6 +301,31 @@ const Strategies = () => {
 
         {/* Tag manager dialog */}
         <TagManagerDialog open={tagManagerOpen} onOpenChange={setTagManagerOpen} />
+
+        {/* Delete confirmation dialog */}
+        <AlertDialog open={deleteConfirmIds.length > 0} onOpenChange={(open) => { if (!open) setDeleteConfirmIds([]); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Permanently delete {deleteConfirmIds.length} {deleteConfirmIds.length === 1 ? "strategy" : "strategies"}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will delete all trades, equity curves, and tags. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  deleteStrategies.mutate(deleteConfirmIds);
+                  setCompareIds((prev) => prev.filter((id) => !deleteConfirmIds.includes(id)));
+                  setDeleteConfirmIds([]);
+                }}
+              >
+                Delete permanently
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {strategies.length === 0 ? (
           <Card className="bg-card border-border">
@@ -345,7 +414,49 @@ const Strategies = () => {
                                   <p className="text-xs text-muted-foreground">Win Rate</p>
                                   <p className="text-sm font-mono font-bold">{m.winRate.toFixed(1)}%</p>
                                 </div>
-                                <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+
+                                {/* Per-card action menu */}
+                                <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7">
+                                        <MoreVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-44">
+                                      {isArchiveView ? (
+                                        <DropdownMenuItem onClick={() => restoreStrategies.mutate([s.id])}>
+                                          <RotateCcw className="h-3.5 w-3.5 mr-2" /> Restore
+                                        </DropdownMenuItem>
+                                      ) : (
+                                        <DropdownMenuItem onClick={() => archiveStrategies.mutate([s.id])}>
+                                          <Archive className="h-3.5 w-3.5 mr-2" /> Archive
+                                        </DropdownMenuItem>
+                                      )}
+                                      <DropdownMenuSub>
+                                        <DropdownMenuSubTrigger>
+                                          <FolderInput className="h-3.5 w-3.5 mr-2" /> Move to Folder
+                                        </DropdownMenuSubTrigger>
+                                        <DropdownMenuSubContent>
+                                          <DropdownMenuItem onClick={() => moveToFolder.mutate({ strategyIds: [s.id], folderId: null })}>
+                                            Uncategorized
+                                          </DropdownMenuItem>
+                                          {folders.length > 0 && <DropdownMenuSeparator />}
+                                          {folders.map((f) => (
+                                            <DropdownMenuItem key={f.id} onClick={() => moveToFolder.mutate({ strategyIds: [s.id], folderId: f.id })}>
+                                              <span className="h-2 w-2 rounded-full shrink-0 mr-2" style={{ backgroundColor: f.color }} />
+                                              {f.name}
+                                            </DropdownMenuItem>
+                                          ))}
+                                        </DropdownMenuSubContent>
+                                      </DropdownMenuSub>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteConfirmIds([s.id])}>
+                                        <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete permanently
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
                               </div>
                             </div>
                           </CardContent>
