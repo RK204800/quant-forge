@@ -9,12 +9,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { ArrowRight, Activity, Plus, X, Check } from "lucide-react";
+import { ArrowRight, Activity, Plus, X, Check, MoreVertical, Briefcase, Eye } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
   const { data: strategies = [], isLoading } = useStrategies();
   const toggleDashboard = useToggleDashboard();
+  const navigate = useNavigate();
 
   if (isLoading) {
     return (
@@ -116,17 +119,26 @@ const Index = () => {
               return (
                 <Link to={`/strategies/${s.id}`} key={s.id}>
                   <Card className="bg-card border-border hover:border-primary/50 transition-colors cursor-pointer relative group">
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        toggleDashboard(s.id, true);
-                      }}
-                      className="absolute top-2 right-2 p-1 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all z-10"
-                      title="Remove from dashboard"
-                    >
-                      <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                    </button>
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-all z-10" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="p-1 rounded-sm hover:bg-accent transition-colors">
+                            <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem onClick={() => navigate(`/portfolio?ids=${s.id}`)} className="text-xs font-mono gap-2">
+                            <Briefcase className="h-3.5 w-3.5" /> Add to Portfolio
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/strategies/${s.id}`)} className="text-xs font-mono gap-2">
+                            <Eye className="h-3.5 w-3.5" /> View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => toggleDashboard(s.id, true)} className="text-xs font-mono gap-2 text-destructive">
+                            <X className="h-3.5 w-3.5" /> Remove from Dashboard
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between pr-6">
                         <CardTitle className="text-sm font-mono">{s.name}</CardTitle>
