@@ -27,6 +27,7 @@ interface FilterSidebarProps {
   selectedFolderId: string | null;
   onFolderSelect: (folderId: string | null) => void;
   folderCounts: Record<string, number>;
+  onArchiveDrop?: (strategyIds: string[]) => void;
 }
 
 function FilterSection({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
@@ -51,7 +52,7 @@ function CheckboxItem({ label, checked, onChange }: { label: string; checked: bo
   );
 }
 
-export function FilterSidebar({ filters, onFiltersChange, availableClasses, availableTimeframes, availableEngines, availableAssetClasses, tags, selectedFolderId, onFolderSelect, folderCounts }: FilterSidebarProps) {
+export function FilterSidebar({ filters, onFiltersChange, availableClasses, availableTimeframes, availableEngines, availableAssetClasses, tags, selectedFolderId, onFolderSelect, folderCounts, onArchiveDrop }: FilterSidebarProps) {
   const toggle = (key: keyof Pick<FilterState, "classes" | "timeframes" | "engines" | "assetClasses" | "statuses" | "tagIds">, val: string) => {
     const arr = filters[key];
     const next = arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val];
@@ -69,6 +70,7 @@ export function FilterSidebar({ filters, onFiltersChange, availableClasses, avai
         selectedFolderId={selectedFolderId}
         onFolderSelect={onFolderSelect}
         strategyCounts={folderCounts}
+        onArchiveDrop={onArchiveDrop}
       />
 
       <div className="border-b border-border" />

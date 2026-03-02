@@ -468,6 +468,63 @@ export function useRemoveTag() {
   });
 }
 
+export function useArchiveStrategies() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) {
+        const { error } = await supabase.from("strategies").update({ status: "archived" }).eq("id", id);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      queryClient.invalidateQueries({ queryKey: ["strategy"] });
+      toast.success("Strategies archived");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+}
+
+export function useRestoreStrategies() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) {
+        const { error } = await supabase.from("strategies").update({ status: "active" }).eq("id", id);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      queryClient.invalidateQueries({ queryKey: ["strategy"] });
+      toast.success("Strategies restored");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+}
+
+export function useDeleteStrategies() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) {
+        await supabase.from("equity_curves").delete().eq("strategy_id", id);
+        await supabase.from("trades").delete().eq("strategy_id", id);
+        await supabase.from("strategy_tag_mapping").delete().eq("strategy_id", id);
+        const { error } = await supabase.from("strategies").delete().eq("id", id);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      queryClient.invalidateQueries({ queryKey: ["strategy"] });
+      toast.success("Strategies permanently deleted");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+}
+
 export function useRecomputeAllEquity() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
