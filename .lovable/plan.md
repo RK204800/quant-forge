@@ -1,40 +1,60 @@
 
 
-## Remove Row Limits on Strategy Data
+## Add Archive and Per-Card Actions to Strategies
 
-### Problem
-Database read queries cap trade and equity curve fetches at 10,000 rows. For the strategies list view, this 10,000 limit is shared across ALL strategies -- meaning with 18+ strategies, individual strategies may have their data silently truncated. Individual strategy detail views also cap at 10,000 trades.
+### Overview
+Add the ability to archive strategies (primary action) and delete them only as a secondary option. Archive moves strategies out of the main view into a virtual "Archived" folder. The existing `status` column on the `strategies` table already supports this -- no database migration needed.
 
 ### Changes
 
-**File: `src/hooks/use-strategies.ts`**
+**1. Add hooks for archive and delete** (`src/hooks/use-strategies.ts`)
 
-Replace the single bulk query approach with paginated fetching that retrieves all rows:
+- `useArchiveStrategies(ids[])` -- sets `status = 'archived'` on the given strategy IDs, invalidates queries, shows toast
+- `useRestoreStrategies(ids[])` -- sets `status = 'active'`, used from the Archived folder view
+- `useDeleteStrategies(ids[])` -- cascade deletes: equity_curves, trades, strategy_tag_mapping, then strategies. Shows a toast. This is the destructive "permanent delete" option.
 
-1. **Create a `fetchAll` helper function** that paginates through results using Supabase's `range()` method (fetching in chunks of 5,000) until all rows are retrieved. This removes the hard 10,000 cap.
+**2. Add "Archived" virtual folder** (`src/components/strategies/FolderTree.tsx`)
 
-2. **Update `useStrategies` (line 92-94)**: Replace `.limit(10000)` calls with the `fetchAll` helper for both trades and equity_curves queries.
+- Render below all user folders, with an `Archive` icon (from lucide)
+- Selection ID: `"archived"`
+- Count: number of strategies with `status === 'archived'`
+- Drop target: dropping strategies onto it archives them
 
-3. **Update `useStrategy` (line 147-148)**: Same change for the single-strategy detail query.
+**3. Update "All Strategies" to exclude archived** (`src/pages/Strategies.tsx`)
 
-4. **Update `useRecomputeStrategy` (line 330-332)**: Remove `.limit(10000)` and use `fetchAll`.
+- The `folderCounts.all` count excludes archived strategies
+- The `folderFiltered` logic: when `selectedFolderId === null` (All), filter out `status === 'archived'`
+- When `selectedFolderId === "archived"`, show only archived strategies
 
-5. **Update `useRecomputeAllStrategies` (line 482-484)**: Same change.
+**4. Add per-card action menu** (`src/pages/Strategies.tsx`)
 
-### Technical Details
+- Add a three-dot (`MoreVertical`) menu on each strategy card (right side, next to metrics)
+- Menu items:
+  - **Archive** (primary) -- archives the strategy
+  - **Move to Folder** -- submenu with folder list
+  - **Delete permanently** -- shows AlertDialog confirmation, then cascade deletes
+- When viewing the Archived folder, the menu shows:
+  - **Restore** -- sets status back to active
+  - **Delete permanently** -- same confirmation dialog
 
-The `fetchAll` helper:
-```text
-async function fetchAll(query): Promise<rows[]>
-  - Uses .range(offset, offset + PAGE_SIZE - 1) in a loop
-  - Continues until a page returns fewer rows than PAGE_SIZE
-  - Concatenates all pages and returns the full dataset
-  - PAGE_SIZE = 5000 (well under Supabase's max response size)
-```
+**5. Add bulk archive and delete to selection bar** (`src/pages/Strategies.tsx`)
 
-This approach:
-- Removes all artificial row limits
-- Keeps the batch insert size at 500 (this is fine -- it's just chunking, not limiting)
-- Handles strategies with any number of trades
-- No database migration needed
+- Add **Archive** button (with Archive icon) in the selection action bar
+- Add **Delete** button (with Trash2 icon, destructive style) -- shows AlertDialog confirming permanent deletion of N strategies
+- When in Archived folder view, show **Restore** instead of Archive
+
+**6. Confirmation dialog for delete** (`src/pages/Strategies.tsx`)
+
+- Use existing AlertDialog components
+- Title: "Permanently delete N strategy/strategies?"
+- Description: "This will delete all trades, equity curves, and tags. This cannot be undone."
+- Actions: Cancel / Delete permanently (destructive)
+
+### Files to modify
+- `src/hooks/use-strategies.ts` -- add `useArchiveStrategies`, `useRestoreStrategies`, `useDeleteStrategies`
+- `src/pages/Strategies.tsx` -- per-card menu, bulk actions, archive folder filtering, delete confirmation dialog
+- `src/components/strategies/FolderTree.tsx` -- add virtual "Archived" folder entry with drop support
+
+### No database changes needed
+The `strategies.status` column already exists with a default of `'active'`. Archive simply sets it to `'archived'`.
 
