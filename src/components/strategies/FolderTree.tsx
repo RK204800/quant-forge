@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useFolders, useCreateFolder, useUpdateFolder, useDeleteFolder, StrategyFolder } from "@/hooks/use-folders";
+import { useState, DragEvent } from "react";
+import { useFolders, useCreateFolder, useUpdateFolder, useDeleteFolder, useMoveToFolder, StrategyFolder } from "@/hooks/use-folders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -18,11 +18,13 @@ export function FolderTree({ selectedFolderId, onFolderSelect, strategyCounts }:
   const createFolder = useCreateFolder();
   const updateFolder = useUpdateFolder();
   const deleteFolder = useDeleteFolder();
+  const moveToFolder = useMoveToFolder();
 
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const handleCreate = () => {
     if (!newName.trim()) return;
@@ -36,6 +38,25 @@ export function FolderTree({ selectedFolderId, onFolderSelect, strategyCounts }:
     updateFolder.mutate({ id, name: editName.trim() });
     setEditingId(null);
   };
+
+  const handleDrop = (e: DragEvent, folderId: string | null) => {
+    e.preventDefault();
+    setDragOverId(null);
+    try {
+      const data = JSON.parse(e.dataTransfer.getData("application/strategy-ids"));
+      if (Array.isArray(data) && data.length > 0) {
+        moveToFolder.mutate({ strategyIds: data, folderId });
+      }
+    } catch {}
+  };
+
+  const handleDragOver = (e: DragEvent, id: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverId(id);
+  };
+
+  const handleDragLeave = () => setDragOverId(null);
 
   const rootFolders = folders.filter((f) => !f.parentId);
 
@@ -63,7 +84,10 @@ export function FolderTree({ selectedFolderId, onFolderSelect, strategyCounts }:
       {/* Uncategorized */}
       <button
         onClick={() => onFolderSelect("uncategorized")}
-        className={`w-full flex items-center gap-2 text-xs px-2 py-1.5 rounded-md transition-colors ${isSelected("uncategorized") ? "bg-accent text-accent-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"}`}
+        onDrop={(e) => handleDrop(e, null)}
+        onDragOver={(e) => handleDragOver(e, "uncategorized")}
+        onDragLeave={handleDragLeave}
+        className={`w-full flex items-center gap-2 text-xs px-2 py-1.5 rounded-md transition-colors ${dragOverId === "uncategorized" ? "bg-primary/20 ring-2 ring-primary/50" : ""} ${isSelected("uncategorized") ? "bg-accent text-accent-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"}`}
       >
         <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-50" />
         <span className="truncate flex-1 text-left">Uncategorized</span>
@@ -89,6 +113,10 @@ export function FolderTree({ selectedFolderId, onFolderSelect, strategyCounts }:
             if (selectedFolderId === id) onFolderSelect(null);
           }}
           onColorChange={(id, color) => updateFolder.mutate({ id, color })}
+          isDragOver={dragOverId === folder.id}
+          onDrop={(e) => handleDrop(e, folder.id)}
+          onDragOver={(e) => handleDragOver(e, folder.id)}
+          onDragLeave={handleDragLeave}
         />
       ))}
 
@@ -116,6 +144,7 @@ export function FolderTree({ selectedFolderId, onFolderSelect, strategyCounts }:
 
 function FolderItem({
   folder, isSelected, onSelect, count, editingId, editName, onStartEdit, onRename, onCancelEdit, onEditNameChange, onDelete, onColorChange,
+  isDragOver, onDrop, onDragOver, onDragLeave,
 }: {
   folder: StrategyFolder;
   isSelected: boolean;
@@ -129,6 +158,10 @@ function FolderItem({
   onEditNameChange: (v: string) => void;
   onDelete: (id: string) => void;
   onColorChange: (id: string, color: string) => void;
+  isDragOver: boolean;
+  onDrop: (e: DragEvent<HTMLDivElement>) => void;
+  onDragOver: (e: DragEvent<HTMLDivElement>) => void;
+  onDragLeave: () => void;
 }) {
   if (editingId === folder.id) {
     return (
@@ -150,7 +183,12 @@ function FolderItem({
   }
 
   return (
-    <div className={`group flex items-center gap-1 text-xs px-2 py-1.5 rounded-md transition-colors ${isSelected ? "bg-accent text-accent-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"}`}>
+    <div
+      onDrop={onDrop}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      className={`group flex items-center gap-1 text-xs px-2 py-1.5 rounded-md transition-colors ${isDragOver ? "bg-primary/20 ring-2 ring-primary/50" : ""} ${isSelected ? "bg-accent text-accent-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"}`}
+    >
       <button onClick={onSelect} className="flex items-center gap-2 flex-1 min-w-0 text-left">
         <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: folder.color }} />
         <span className="truncate">{folder.name}</span>

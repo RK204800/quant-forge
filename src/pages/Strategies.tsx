@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, DragEvent } from "react";
 import { useStrategies, useUpdateStrategy, useToggleFavorite, useToggleDashboard, useTags, useRecomputeAllEquity } from "@/hooks/use-strategies";
 import { useFolders, useMoveToFolder } from "@/hooks/use-folders";
 import { calculateMetrics } from "@/lib/analytics";
@@ -276,7 +276,11 @@ const Strategies = () => {
               </div>
               <div className="grid gap-3">
                 {items.map(({ strategy: s, metrics: m }) => (
-                  <div key={s.id}>
+                  <div key={s.id} draggable onDragStart={(e: DragEvent<HTMLDivElement>) => {
+                    const ids = compareIds.includes(s.id) && compareIds.length > 1 ? compareIds : [s.id];
+                    e.dataTransfer.setData("application/strategy-ids", JSON.stringify(ids));
+                    e.dataTransfer.effectAllowed = "move";
+                  }}>
                     {editingId === s.id ? (
                       <Card className="bg-card border-primary">
                         <CardContent className="p-4 space-y-3">
