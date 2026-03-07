@@ -56,20 +56,30 @@ export function normalizeDateTime(dt: string): string | null {
   const native = new Date(trimmed);
   if (!isNaN(native.getTime())) return native.toISOString();
 
-  // MM/DD/YYYY or MM-DD-YYYY with optional time
-  const usMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  // MM/DD/YYYY or MM-DD-YYYY with optional time and AM/PM
+  const usMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i);
   if (usMatch) {
-    const [, m, d, y, h = "0", min = "0", s = "0"] = usMatch;
-    const date = new Date(Number(y), Number(m) - 1, Number(d), Number(h), Number(min), Number(s));
+    const [, m, d, y, h = "0", min = "0", s = "0", ampm] = usMatch;
+    let hour = Number(h);
+    if (ampm) {
+      if (ampm.toUpperCase() === "PM" && hour < 12) hour += 12;
+      if (ampm.toUpperCase() === "AM" && hour === 12) hour = 0;
+    }
+    const date = new Date(Number(y), Number(m) - 1, Number(d), hour, Number(min), Number(s));
     if (!isNaN(date.getTime())) return date.toISOString();
   }
 
-  // DD/MM/YYYY with optional time
-  const euMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  // DD/MM/YYYY with optional time and AM/PM
+  const euMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i);
   if (euMatch) {
-    const [, d, m, y, h = "0", min = "0", s = "0"] = euMatch;
+    const [, d, m, y, h = "0", min = "0", s = "0", ampm] = euMatch;
     if (Number(m) <= 12) {
-      const date = new Date(Number(y), Number(m) - 1, Number(d), Number(h), Number(min), Number(s));
+      let hour = Number(h);
+      if (ampm) {
+        if (ampm.toUpperCase() === "PM" && hour < 12) hour += 12;
+        if (ampm.toUpperCase() === "AM" && hour === 12) hour = 0;
+      }
+      const date = new Date(Number(y), Number(m) - 1, Number(d), hour, Number(min), Number(s));
       if (!isNaN(date.getTime())) return date.toISOString();
     }
   }
