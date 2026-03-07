@@ -3,7 +3,7 @@ import { parseBacktraderCSV } from "./backtrader";
 import { parseNinjaTrader } from "./ninjatrader";
 import { parseQuantConnect } from "./quantconnect";
 import { parseTradingView } from "./tradingview";
-import { normalizeHeader, stripPrelude } from "./utils";
+import { normalizeHeader, stripPrelude, detectDelimiter } from "./utils";
 
 export interface ParseResult {
   trades: Trade[];
@@ -23,20 +23,23 @@ export function detectFormat(content: string, fileName: string): FileFormat {
 
   const clean = content.replace(/^\uFEFF/, "");
   const lines = clean.split("\n").map((l) => l.trim()).filter(Boolean);
-  const header = normalizeHeader(lines[0] ?? "");
+  const rawHeader = lines[0] ?? "";
+  const delimiter = detectDelimiter(rawHeader);
+  const headerCols = rawHeader.split(delimiter).map((c) => normalizeHeader(c.replace(/^"|"$/g, "")));
+  const header = headerCols.join("");
 
   // NinjaTrader: has separate entry/exit price columns or marketpos
-  if (header.includes("instrument") && (header.includes("marketposition") || header.includes("marketpos"))) return "ninjatrader";
-  if ((header.includes("tradenumber") || header.includes("tradeno")) && header.includes("entryprice")) return "ninjatrader";
+  if (headerCols.includes("instrument") && (headerCols.some(c => c.startsWith("marketpos")) || headerCols.includes("marketposition"))) return "ninjatrader";
+  if ((headerCols.includes("tradenumber") || headerCols.includes("tradeno") || headerCols.includes("trade")) && headerCols.includes("entryprice")) return "ninjatrader";
 
   // TradingView: "Trade #" with single Price column and paired entry/exit rows
   if (header.includes("trade") && header.includes("signal")) return "tradingview";
 
   // Backtrader / generic
-  if (header.includes("ref") || header.includes("ticker")) return "backtrader";
+  if (headerCols.includes("ref") || headerCols.includes("ticker")) return "backtrader";
 
   // Fallback heuristics
-  if (header.includes("entryprice") || header.includes("exitprice")) return "ninjatrader";
+  if (headerCols.includes("entryprice") || headerCols.includes("exitprice")) return "ninjatrader";
   if (header.includes("profit") && header.includes("price")) return "tradingview";
 
   return "generic";
