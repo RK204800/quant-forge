@@ -3,7 +3,7 @@ import { parseBacktraderCSV } from "./backtrader";
 import { parseNinjaTrader } from "./ninjatrader";
 import { parseQuantConnect } from "./quantconnect";
 import { parseTradingView } from "./tradingview";
-import { normalizeHeader, stripPrelude } from "./utils";
+import { normalizeHeader, stripPrelude, detectDelimiter } from "./utils";
 
 export interface ParseResult {
   trades: Trade[];
