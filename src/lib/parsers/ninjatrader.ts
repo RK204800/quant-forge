@@ -22,14 +22,14 @@ export function parseNinjaTrader(content: string, strategyId: string): ParseResu
         }
       }
 
-      const pnl = safeFloat(findCol(row, "Profit", "profit", "Net profit", "Net P&L", "P&L", "pnl", "PnL"));
-      const commission = safeFloat(findCol(row, "Commission", "commission", "comm"));
+      const pnl = safeFloat(findCol(row, "Profit", "profit", "Net profit", "Net P&L", "P&L", "pnl", "PnL", "Net pnl"));
+      const commission = safeFloat(findCol(row, "Commission", "commission", "comm", "Comm"));
 
-      const maeVal = findCol(row, "MAE", "mae", "Max Adverse Excursion");
-      const mfeVal = findCol(row, "MFE", "mfe", "Max Favorable Excursion");
+      const maeVal = findCol(row, "MAE", "mae", "Max Adverse Excursion", "Max. Adverse Excursion");
+      const mfeVal = findCol(row, "MFE", "mfe", "Max Favorable Excursion", "Max. Favorable Excursion");
 
-      const entryDateRaw = String(findCol(row, "Entry time", "EntryTime", "entry_time", "Entry Date", "entry_date") ?? "");
-      const exitDateRaw = String(findCol(row, "Exit time", "ExitTime", "exit_time", "Exit Date", "exit_date") ?? "");
+      const entryDateRaw = String(findCol(row, "Entry time", "EntryTime", "entry_time", "Entry Date", "entry_date", "Entry date") ?? "");
+      const exitDateRaw = String(findCol(row, "Exit time", "ExitTime", "exit_time", "Exit Date", "exit_date", "Exit date") ?? "");
 
       const entryTime = normalizeDateTime(entryDateRaw);
       const exitTime = normalizeDateTime(exitDateRaw) || entryTime;
@@ -43,7 +43,7 @@ export function parseNinjaTrader(content: string, strategyId: string): ParseResu
       const direction: "long" | "short" = dirRaw.toLowerCase().includes("short") ? "short" : "long";
       const entryPrice = safeFloat(findCol(row, "Entry price", "EntryPrice", "entry_price", "Entry"));
       const exitPrice = safeFloat(findCol(row, "Exit price", "ExitPrice", "exit_price", "Exit"));
-      const quantity = safeFloat(findCol(row, "Quantity", "quantity", "qty", "Qty", "size", "contracts", "Contracts"), 1);
+      const quantity = safeFloat(findCol(row, "Quantity", "quantity", "qty", "Qty", "size", "contracts", "Contracts", "# of contracts"), 1);
       const effectivePnl = pnl === 0 && entryPrice !== 0 && exitPrice !== 0
         ? computePnl(direction, entryPrice, exitPrice, quantity) : pnl;
 

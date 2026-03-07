@@ -127,13 +127,32 @@ const TRADE_COLUMN_TOKENS = new Set([
   "quantity", "qty", "contracts", "size", "direction", "side", "type",
   "marketposition", "marketpos", "price", "datetime", "date", "signal",
   "mae", "mfe", "runup", "drawdown", "cumprofit",
+  "entryname", "exitname", "ofcontracts",
 ]);
+
+/**
+ * Detect the most likely delimiter in a CSV line.
+ */
+export function detectDelimiter(line: string): string {
+  const candidates = [",", ";", "\t"];
+  let best = ",";
+  let bestCount = 0;
+  for (const d of candidates) {
+    const count = line.split(d).length - 1;
+    if (count > bestCount) {
+      bestCount = count;
+      best = d;
+    }
+  }
+  return best;
+}
 
 /**
  * Score a CSV header line: how many columns match known trade-table tokens.
  */
 export function scoreHeaderRow(headerLine: string): number {
-  const cols = headerLine.split(",").map((c) => normalizeHeader(c.replace(/^"|"$/g, "")));
+  const delimiter = detectDelimiter(headerLine);
+  const cols = headerLine.split(delimiter).map((c) => normalizeHeader(c.replace(/^"|"$/g, "")));
   return cols.filter((c) => c.length > 0 && TRADE_COLUMN_TOKENS.has(c)).length;
 }
 
