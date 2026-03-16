@@ -16,6 +16,11 @@ import { useNavigate } from "react-router-dom";
 import { AddToPortfolioDialog } from "@/components/portfolio/AddToPortfolioDialog";
 import { useState } from "react";
 
+function safeFmt(v: number, decimals = 2): string {
+  if (!isFinite(v) || isNaN(v)) return "—";
+  return v.toFixed(decimals);
+}
+
 const Index = () => {
   const { data: strategies = [], isLoading } = useStrategies();
   const toggleDashboard = useToggleDashboard();
