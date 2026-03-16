@@ -109,10 +109,10 @@ export function useStrategies() {
 
       const [tradesAll, equityAll, tagMappingsRes] = await Promise.all([
         fetchAll<any>((from, to) =>
-          supabase.from("trades").select("*").in("strategy_id", strategyIds).order("entry_time").range(from, to)
+          supabase.from("trades").select("*").in("strategy_id", strategyIds).order("entry_time").order("id").range(from, to)
         ),
         fetchAll<any>((from, to) =>
-          supabase.from("equity_curves").select("*").in("strategy_id", strategyIds).order("timestamp").order("created_at").range(from, to)
+          supabase.from("equity_curves").select("*").in("strategy_id", strategyIds).order("timestamp").order("id").range(from, to)
         ),
         supabase.from("strategy_tag_mapping").select("strategy_id, tag_id, strategy_tags(*)").in("strategy_id", strategyIds),
       ]);
