@@ -1,149 +1,62 @@
 
+## Diagnosis
 
-## World-Class Portfolio Risk Management Suite
+I traced this to the data-loading layer, not the NinjaTrader parser.
 
-### Overview
-Add a comprehensive "Portfolio Risk Assessment" tab/section to the Portfolio Detail page with institutional-grade risk management analytics. This is a pure client-side computation layer -- no database changes needed.
+- The NinjaTrader uploads are being saved correctly. The database contains the recent strategies and their trade/equity rows, and the single strategy detail page works because it loads one strategy at a time.
+- The broken views are the ones that depend on `useStrategies()`:
+  - strategy tiles
+  - dashboard cards
+  - portfolio member stats
 
-### New File: `src/lib/portfolio-analytics.ts`
+## Root Cause
 
-A dedicated analytics engine for portfolio-level risk computations containing all the functions below.
+`src/hooks/use-strategies.ts` has a bulk pagination helper:
 
-#### 1. Kelly Criterion Position Sizing
-- **Per-strategy Kelly fraction**: `f* = W - (1-W)/R` where W = win rate, R = avg win / avg loss
-- **Half-Kelly** (industry standard conservative): `f*/2`
-- **Portfolio-level Kelly**: Optimal fraction adjusted for correlation between strategies
-- Display recommended allocation vs current allocation with a comparison table
-
-#### 2. Conservative Drawdown Stress Test (MAE-based)
-- For each strategy, find the worst MAE across all trades (or estimated MAE)
-- **Concurrent worst-case**: Sum of all strategies' worst MAEs simultaneously (assume all open positions hit max adverse excursion at once)
-- **Weighted worst-case**: Apply portfolio weights to the concurrent MAE sum
-- Show as dollar amount and as percentage of a user-configurable account size (default $100,000)
-- Display per-strategy MAE contribution breakdown
-
-#### 3. Portfolio Heat / Margin of Safety
-- **Portfolio Heat** = sum of all position risks (worst-case stop distances) as % of capital
-- Risk budget consumed: how much of a configurable max-risk threshold (e.g. 6% of capital) is used
-- Traffic-light indicator: Green (<50% budget), Yellow (50-80%), Red (>80%)
-
-#### 4. Diversification Score
-- Uses existing correlation matrix computation (Pearson)
-- **Diversification Ratio** = weighted sum of individual volatilities / portfolio volatility
-- Higher ratio = better diversification
-- Score normalized 0-100 with interpretation labels (Poor / Fair / Good / Excellent)
-
-#### 5. Tail Risk Analysis (CVaR / Expected Shortfall)
-- **Value at Risk (VaR)** at 95% and 99% confidence from combined daily PnL distribution
-- **Conditional VaR (CVaR)**: Average loss in the worst 5% of days
-- Per-strategy contribution to portfolio tail risk
-
-#### 6. Portfolio Monte Carlo
-- Run Monte Carlo on the combined portfolio trade stream (interleaved by date, weighted)
-- Show portfolio-level percentile equity paths, risk of ruin, and max drawdown distribution
-- Reuses existing `runMonteCarlo` logic with combined PnL stream
-
-#### 7. Concentration Risk
-- **Herfindahl-Hirschman Index (HHI)** of portfolio weights
-- Flag if any single strategy exceeds configurable threshold (e.g. 40%)
-- Instrument overlap detection: count shared instruments across strategies
-
-#### 8. Portfolio Stability Score
-- Composite score (0-100) combining:
-  - Diversification ratio (25%)
-  - Kelly alignment (25%) -- how close current weights are to optimal
-  - Drawdown resilience (25%) -- worst-case MAE vs capital
-  - Tail risk grade (25%) -- CVaR relative to expected return
-- Letter grade: A+ through F
-
-### New Component: `src/components/portfolio/PortfolioRiskAssessment.tsx`
-
-A tabbed or sectioned component that renders all the above analytics:
-
-```text
-+------------------------------------------------------+
-| PORTFOLIO RISK ASSESSMENT                            |
-|------------------------------------------------------|
-| [Overall Score: A-  (82/100)]                        |
-|                                                      |
-| +-- Risk Summary Cards (4-col grid) ---------------+ |
-| | Kelly Optimal | Worst-Case DD | VaR 95% | Heat   | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Kelly Position Sizing Table -------------------+ |
-| | Strategy | WinRate | R:R | Kelly | Half-Kelly |  | |
-| |          |         |     | Curr% | Suggest%   |  | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Stress Test (MAE Concurrent) ------------------+ |
-| | Strategy | Worst MAE | Weight | Contrib          | |
-| | TOTAL    | $X,XXX    | ---    | $X,XXX           | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Tail Risk (VaR / CVaR) -----------------------+ | 
-| | VaR 95%: $X,XXX  |  CVaR 95%: $X,XXX           | |
-| | VaR 99%: $X,XXX  |  CVaR 99%: $X,XXX           | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Concentration & Diversification ---------------+ |
-| | HHI: 0.XX  |  Div Ratio: X.XX  |  Score: XX/100 | |
-| | Instrument Overlap Matrix                        | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Portfolio Monte Carlo -------------------------+ |
-| | (Reuses MonteCarloChart with combined PnLs)      | |
-| +--------------------------------------------------+ |
-+------------------------------------------------------+
+```ts
+const PAGE_SIZE = 5000;
 ```
 
-### Integration into PortfolioDetail.tsx
+But the backend read limit is effectively capped to 1000 rows per request.
 
-- Add the `<PortfolioRiskAssessment>` component after the correlation matrix
-- Pass `memberStrategies` (with trades, equity curves, weights) and an `accountSize` prop (default 100k, editable inline)
-- Only renders when 1+ strategies are in the portfolio
+That creates a subtle bug:
+- the code asks for 5000 rows
+- the backend returns only ~1000
+- `fetchAll()` sees `data.length < PAGE_SIZE` and incorrectly assumes it reached the end
+- it stops after the first page
 
-### Files to Create
-- `src/lib/portfolio-analytics.ts` -- all computation functions
-- `src/components/portfolio/PortfolioRiskAssessment.tsx` -- full UI component
+Because the bulk queries are ordered oldest-first across all strategies, older strategies consume the first 1000 rows. Recent NinjaTrader strategies never get their trades/equity attached in list-based views, so their tiles and portfolio cards look empty even though the detail page works.
 
-### Files to Modify
-- `src/pages/PortfolioDetail.tsx` -- import and render the new component
+## Implementation Plan
 
-### Technical Details
+1. **Fix pagination in `src/hooks/use-strategies.ts`**
+   - Change the bulk page size to a safe value at or below the backend row cap
+   - Make `fetchAll()` stop based on the actual page size being requested, not the old 5000 assumption
 
-**Kelly Criterion formula:**
-```text
-f* = W - (1 - W) / R
-where W = win rate (decimal), R = avgWin / avgLoss
-Half-Kelly = f* / 2
-```
+2. **Make paginated ordering deterministic**
+   - Add stable secondary ordering to bulk paginated queries so rows aren’t skipped or duplicated across pages when timestamps are identical
+   - Apply this to both trades and equity-curve queries
 
-**Diversification Ratio:**
-```text
-DR = (sum of w_i * sigma_i) / sigma_portfolio
-where sigma_portfolio = sqrt(w' * C * w), C = covariance matrix
-```
+3. **Update all strategy-loading paths that use `fetchAll()`**
+   - `useStrategies()`
+   - `useStrategy()`
+   - recompute flows that page through trades
+   This keeps list pages, detail pages, and recompute actions consistent
 
-**CVaR calculation:**
-```text
-Sort daily PnLs ascending
-VaR_95 = PnL at 5th percentile
-CVaR_95 = mean of all PnLs below VaR_95
-```
+4. **Re-verify the affected UI surfaces**
+   - Strategies page tiles
+   - Dashboard cards
+   - Portfolio detail strategy cards and combined portfolio stats
 
-**HHI (concentration):**
-```text
-HHI = sum(w_i^2) where w_i are normalized weights
-Range: 1/n (perfect diversification) to 1.0 (single strategy)
-```
+## Technical Notes
 
-**Composite Portfolio Score weighting:**
-```text
-Score = 0.25 * diversification_score
-      + 0.25 * kelly_alignment_score
-      + 0.25 * drawdown_resilience_score
-      + 0.25 * tail_risk_grade
-```
+- No database schema or RLS changes are needed
+- No parser rewrite is needed
+- The issue is specifically caused by bulk multi-strategy reads being truncated before newer NinjaTrader rows are reached
+- The main file to change is `src/hooks/use-strategies.ts`
 
-All computations are client-side using existing trade data -- no API calls or database changes required.
+## Expected Result After Fix
 
+- Recent NinjaTrader strategies will show populated metrics in tiles
+- Adding them to portfolios will show their trade-driven stats correctly
+- Portfolio aggregate calculations will include their real trades/equity instead of empty arrays
