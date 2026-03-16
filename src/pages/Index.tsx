@@ -164,7 +164,7 @@ const Index = () => {
                         </div>
                         <div>
                           <span className="text-muted-foreground">Sharpe</span>
-                          <p className="font-medium">{m.sharpeRatio.toFixed(2)}</p>
+                          <p className="font-medium">{safeFmt(m.sharpeRatio)}</p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Win Rate</span>
