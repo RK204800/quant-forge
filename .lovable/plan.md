@@ -1,149 +1,59 @@
 
 
-## World-Class Portfolio Risk Management Suite
+## Enhance Portfolio Detail with Full Analysis
 
-### Overview
-Add a comprehensive "Portfolio Risk Assessment" tab/section to the Portfolio Detail page with institutional-grade risk management analytics. This is a pure client-side computation layer -- no database changes needed.
+### Problem 1: Broken Combined Equity Curve
+The current combined equity curve uses **index-based alignment** (line 73-86 in PortfolioDetail.tsx). It iterates by array index `i`, which means it aligns the 1st point of strategy A with the 1st point of strategy B regardless of their actual timestamps. Strategies with different date ranges or different numbers of equity points get misaligned, producing an incorrect combined curve.
 
-### New File: `src/lib/portfolio-analytics.ts`
+**Fix**: Switch to **time-based merging**. Collect all unique timestamps across member strategies, sort chronologically, and at each timestamp interpolate each strategy's equity value using the most recent known point. Apply weights and sum to produce the combined curve.
 
-A dedicated analytics engine for portfolio-level risk computations containing all the functions below.
+### Problem 2: Missing Analysis Tabs
+The strategy detail page has 6 tabs: Overview, Analysis, Performance, Robustness, Trade Chart, Trade Log. The portfolio detail page only shows summary metric cards, a combined equity curve, correlation matrix, and risk assessment.
 
-#### 1. Kelly Criterion Position Sizing
-- **Per-strategy Kelly fraction**: `f* = W - (1-W)/R` where W = win rate, R = avg win / avg loss
-- **Half-Kelly** (industry standard conservative): `f*/2`
-- **Portfolio-level Kelly**: Optimal fraction adjusted for correlation between strategies
-- Display recommended allocation vs current allocation with a comparison table
+**Fix**: Add the same tabbed layout to the portfolio detail page, operating on the combined/aggregated trade set (`allTrades = memberStrategies.flatMap(s => s.trades)`) and the corrected combined equity curve.
 
-#### 2. Conservative Drawdown Stress Test (MAE-based)
-- For each strategy, find the worst MAE across all trades (or estimated MAE)
-- **Concurrent worst-case**: Sum of all strategies' worst MAEs simultaneously (assume all open positions hit max adverse excursion at once)
-- **Weighted worst-case**: Apply portfolio weights to the concurrent MAE sum
-- Show as dollar amount and as percentage of a user-configurable account size (default $100,000)
-- Display per-strategy MAE contribution breakdown
+### Implementation Plan
 
-#### 3. Portfolio Heat / Margin of Safety
-- **Portfolio Heat** = sum of all position risks (worst-case stop distances) as % of capital
-- Risk budget consumed: how much of a configurable max-risk threshold (e.g. 6% of capital) is used
-- Traffic-light indicator: Green (<50% budget), Yellow (50-80%), Red (>80%)
+**File: `src/pages/PortfolioDetail.tsx`**
 
-#### 4. Diversification Score
-- Uses existing correlation matrix computation (Pearson)
-- **Diversification Ratio** = weighted sum of individual volatilities / portfolio volatility
-- Higher ratio = better diversification
-- Score normalized 0-100 with interpretation labels (Poor / Fair / Good / Excellent)
+1. **Fix combined equity curve** -- Replace the index-based loop with a time-sorted merge:
+   - Collect all timestamps from all member strategies into a sorted set
+   - For each timestamp, find each strategy's equity at that point (last known value)
+   - Sum weighted equities and compute drawdown
 
-#### 5. Tail Risk Analysis (CVaR / Expected Shortfall)
-- **Value at Risk (VaR)** at 95% and 99% confidence from combined daily PnL distribution
-- **Conditional VaR (CVaR)**: Average loss in the worst 5% of days
-- Per-strategy contribution to portfolio tail risk
+2. **Add analysis imports** -- Import the same components used in StrategyDetail:
+   - `MetricsGrid`, `MonthlyHeatmap`, `TradeDistribution`, `PeriodAnalysis`, `PerformanceSummary`, `ExpectancyCurve`, `RollingSharpe`, `StreakAnalysis`, `MonteCarloChart`, `RobustnessScore`, `RROptimizer`, `WalkForwardChart`, `TradesTable`, `getMonthlyReturns`
 
-#### 6. Portfolio Monte Carlo
-- Run Monte Carlo on the combined portfolio trade stream (interleaved by date, weighted)
-- Show portfolio-level percentile equity paths, risk of ruin, and max drawdown distribution
-- Reuses existing `runMonteCarlo` logic with combined PnL stream
+3. **Add Tabs structure** -- After the strategy weight cards, wrap the existing combined equity curve and new analysis components in a tabbed layout:
+   - **Overview**: MetricsGrid, combined equity curve + trade distribution side by side, monthly heatmap
+   - **Analysis**: PeriodAnalysis (trades, time-of-day, day-of-week, daily/weekly/monthly bars)
+   - **Performance**: PerformanceSummary, ExpectancyCurve + RollingSharpe side by side, StreakAnalysis
+   - **Robustness**: MonteCarloChart + RobustnessScore side by side, RROptimizer, WalkForwardChart
+   - **Trade Log**: TradesTable
+   - **Composition**: The existing correlation matrix and risk assessment (moved here)
 
-#### 7. Concentration Risk
-- **Herfindahl-Hirschman Index (HHI)** of portfolio weights
-- Flag if any single strategy exceeds configurable threshold (e.g. 40%)
-- Instrument overlap detection: count shared instruments across strategies
+4. **Compute aggregated data** -- Use `useMemo` for:
+   - `allTrades`: flat merge of all member strategy trades
+   - `combinedCurve`: time-based merged equity curve
+   - `portfolioMetrics`: `calculateMetrics(allTrades, combinedCurve)`
+   - `monthlyReturns`: `getMonthlyReturns(combinedCurve)`
 
-#### 8. Portfolio Stability Score
-- Composite score (0-100) combining:
-  - Diversification ratio (25%)
-  - Kelly alignment (25%) -- how close current weights are to optimal
-  - Drawdown resilience (25%) -- worst-case MAE vs capital
-  - Tail risk grade (25%) -- CVaR relative to expected return
-- Letter grade: A+ through F
-
-### New Component: `src/components/portfolio/PortfolioRiskAssessment.tsx`
-
-A tabbed or sectioned component that renders all the above analytics:
+### Technical Details: Time-Based Equity Merge
 
 ```text
-+------------------------------------------------------+
-| PORTFOLIO RISK ASSESSMENT                            |
-|------------------------------------------------------|
-| [Overall Score: A-  (82/100)]                        |
-|                                                      |
-| +-- Risk Summary Cards (4-col grid) ---------------+ |
-| | Kelly Optimal | Worst-Case DD | VaR 95% | Heat   | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Kelly Position Sizing Table -------------------+ |
-| | Strategy | WinRate | R:R | Kelly | Half-Kelly |  | |
-| |          |         |     | Curr% | Suggest%   |  | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Stress Test (MAE Concurrent) ------------------+ |
-| | Strategy | Worst MAE | Weight | Contrib          | |
-| | TOTAL    | $X,XXX    | ---    | $X,XXX           | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Tail Risk (VaR / CVaR) -----------------------+ | 
-| | VaR 95%: $X,XXX  |  CVaR 95%: $X,XXX           | |
-| | VaR 99%: $X,XXX  |  CVaR 99%: $X,XXX           | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Concentration & Diversification ---------------+ |
-| | HHI: 0.XX  |  Div Ratio: X.XX  |  Score: XX/100 | |
-| | Instrument Overlap Matrix                        | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Portfolio Monte Carlo -------------------------+ |
-| | (Reuses MonteCarloChart with combined PnLs)      | |
-| +--------------------------------------------------+ |
-+------------------------------------------------------+
+Strategy A:  t1=100  t3=120  t5=130
+Strategy B:  t2=50   t3=60   t4=70
+
+Merged timeline: t1, t2, t3, t4, t5
+At t1: A=100, B=0 (no data yet)
+At t2: A=100 (carry forward), B=50
+At t3: A=120, B=60
+At t4: A=120 (carry forward), B=70
+At t5: A=130, B=70 (carry forward)
+
+Combined = weighted sum at each timestamp
 ```
 
-### Integration into PortfolioDetail.tsx
-
-- Add the `<PortfolioRiskAssessment>` component after the correlation matrix
-- Pass `memberStrategies` (with trades, equity curves, weights) and an `accountSize` prop (default 100k, editable inline)
-- Only renders when 1+ strategies are in the portfolio
-
-### Files to Create
-- `src/lib/portfolio-analytics.ts` -- all computation functions
-- `src/components/portfolio/PortfolioRiskAssessment.tsx` -- full UI component
-
-### Files to Modify
-- `src/pages/PortfolioDetail.tsx` -- import and render the new component
-
-### Technical Details
-
-**Kelly Criterion formula:**
-```text
-f* = W - (1 - W) / R
-where W = win rate (decimal), R = avgWin / avgLoss
-Half-Kelly = f* / 2
-```
-
-**Diversification Ratio:**
-```text
-DR = (sum of w_i * sigma_i) / sigma_portfolio
-where sigma_portfolio = sqrt(w' * C * w), C = covariance matrix
-```
-
-**CVaR calculation:**
-```text
-Sort daily PnLs ascending
-VaR_95 = PnL at 5th percentile
-CVaR_95 = mean of all PnLs below VaR_95
-```
-
-**HHI (concentration):**
-```text
-HHI = sum(w_i^2) where w_i are normalized weights
-Range: 1/n (perfect diversification) to 1.0 (single strategy)
-```
-
-**Composite Portfolio Score weighting:**
-```text
-Score = 0.25 * diversification_score
-      + 0.25 * kelly_alignment_score
-      + 0.25 * drawdown_resilience_score
-      + 0.25 * tail_risk_grade
-```
-
-All computations are client-side using existing trade data -- no API calls or database changes required.
+### Files Modified
+- `src/pages/PortfolioDetail.tsx` (primary -- restructure with tabs, fix equity merge)
 
