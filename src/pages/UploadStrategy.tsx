@@ -120,6 +120,7 @@ const UploadStrategy = () => {
     setSaving(true);
     setSaveProgress({ current: 0, total: pending.length });
 
+    let allSucceeded = true;
     for (let i = 0; i < pending.length; i++) {
       const item = pending[i];
       setSaveProgress({ current: i + 1, total: pending.length });
@@ -142,18 +143,14 @@ const UploadStrategy = () => {
           );
         });
       } catch {
-        // continue saving remaining items
+        allSucceeded = false;
       }
     }
 
     setSaving(false);
-    setTimeout(() => {
-      setQueue((prev) => {
-        const allDone = prev.every((q) => q.status === "saved");
-        if (allDone) navigate("/strategies");
-        return prev;
-      });
-    }, 500);
+    if (allSucceeded) {
+      navigate("/strategies");
+    }
   };
 
   const pendingCount = queue.filter((q) => q.status === "pending").length;

@@ -21,6 +21,11 @@ import { toast } from "sonner";
 
 const STRATEGY_CLASSES = ["RSI Strategy", "Breakout", "Mean Reversion", "ML Model", "A/D Strategy", "Momentum", "Scalping", "Custom"];
 
+function safeFmt(v: number, decimals = 2): string {
+  if (!isFinite(v) || isNaN(v)) return "—";
+  return v.toFixed(decimals);
+}
+
 function getMetricValue(metrics: StrategyMetrics, field: SortField): number {
   switch (field) {
     case "profitFactor": return metrics.profitFactor;
@@ -402,7 +407,7 @@ const Strategies = () => {
                               <div className="flex items-center gap-6 shrink-0">
                                 <div className="text-right">
                                   <p className="text-xs text-muted-foreground">PF</p>
-                                  <p className="text-sm font-mono font-bold">{m.profitFactor.toFixed(2)}</p>
+                                  <p className="text-sm font-mono font-bold">{safeFmt(m.profitFactor)}</p>
                                 </div>
                                 <div className="text-right">
                                   <p className="text-xs text-muted-foreground">Return</p>
@@ -410,11 +415,11 @@ const Strategies = () => {
                                 </div>
                                 <div className="text-right">
                                   <p className="text-xs text-muted-foreground">Sharpe</p>
-                                  <p className="text-sm font-mono font-bold">{m.sharpeRatio.toFixed(2)}</p>
+                                  <p className="text-sm font-mono font-bold">{safeFmt(m.sharpeRatio)}</p>
                                 </div>
                                 <div className="text-right">
                                   <p className="text-xs text-muted-foreground">Win Rate</p>
-                                  <p className="text-sm font-mono font-bold">{m.winRate.toFixed(1)}%</p>
+                                  <p className="text-sm font-mono font-bold">{safeFmt(m.winRate, 1)}%</p>
                                 </div>
 
                                 {/* Per-card action menu */}

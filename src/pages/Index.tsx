@@ -16,6 +16,11 @@ import { useNavigate } from "react-router-dom";
 import { AddToPortfolioDialog } from "@/components/portfolio/AddToPortfolioDialog";
 import { useState } from "react";
 
+function safeFmt(v: number, decimals = 2): string {
+  if (!isFinite(v) || isNaN(v)) return "—";
+  return v.toFixed(decimals);
+}
+
 const Index = () => {
   const { data: strategies = [], isLoading } = useStrategies();
   const toggleDashboard = useToggleDashboard();
@@ -159,11 +164,11 @@ const Index = () => {
                         </div>
                         <div>
                           <span className="text-muted-foreground">Sharpe</span>
-                          <p className="font-medium">{m.sharpeRatio.toFixed(2)}</p>
+                          <p className="font-medium">{safeFmt(m.sharpeRatio)}</p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Win Rate</span>
-                          <p className="font-medium">{m.winRate.toFixed(1)}%</p>
+                          <p className="font-medium">{safeFmt(m.winRate, 1)}%</p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Max DD</span>

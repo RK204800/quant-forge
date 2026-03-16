@@ -285,8 +285,8 @@ export function useSaveStrategy() {
 
       return strategyId;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["strategies"], refetchType: "all" });
       toast.success("Strategy saved successfully");
     },
     onError: (error: any) => {

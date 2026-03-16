@@ -181,7 +181,7 @@ const PortfolioDetail = () => {
             <Card className="bg-card border-border">
               <CardContent className="pt-4 pb-3 px-4">
                 <p className="text-xs text-muted-foreground font-mono">WIN RATE</p>
-                <p className="text-lg font-bold font-mono">{(pm.winRate * 100).toFixed(1)}%</p>
+                <p className="text-lg font-bold font-mono">{pm.winRate.toFixed(1)}%</p>
               </CardContent>
             </Card>
           </div>
