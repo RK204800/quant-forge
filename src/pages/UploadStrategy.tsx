@@ -120,6 +120,7 @@ const UploadStrategy = () => {
     setSaving(true);
     setSaveProgress({ current: 0, total: pending.length });
 
+    let allSucceeded = true;
     for (let i = 0; i < pending.length; i++) {
       const item = pending[i];
       setSaveProgress({ current: i + 1, total: pending.length });
@@ -142,13 +143,12 @@ const UploadStrategy = () => {
           );
         });
       } catch {
-        // continue saving remaining items
+        allSucceeded = false;
       }
     }
 
     setSaving(false);
-    const allDone = queue.every((q) => q.status === "saved" || pending.find((p) => p.id === q.id));
-    if (allDone) {
+    if (allSucceeded) {
       navigate("/strategies");
     }
   };
