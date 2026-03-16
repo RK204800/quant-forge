@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Strategy, Trade, EquityPoint, StrategyTag } from "@/types";
 import { toast } from "sonner";
 
-const PAGE_SIZE = 5000;
+const PAGE_SIZE = 1000;
 
 async function fetchAll<T>(
   buildQuery: (from: number, to: number) => any
