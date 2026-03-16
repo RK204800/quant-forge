@@ -1,20 +1,34 @@
 import { useParams, Link } from "react-router-dom";
 import { usePortfolio, useUpdatePortfolio, useUpdateWeight, useRemoveFromPortfolio, useAddToPortfolio, useDeletePortfolio } from "@/hooks/use-portfolios";
 import { useStrategies } from "@/hooks/use-strategies";
-import { calculateMetrics } from "@/lib/analytics";
+import { calculateMetrics, getMonthlyReturns } from "@/lib/analytics";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EquityCurve } from "@/components/dashboard/EquityCurve";
+import { MetricsGrid } from "@/components/dashboard/MetricsGrid";
+import { MonthlyHeatmap } from "@/components/dashboard/MonthlyHeatmap";
+import { TradeDistribution } from "@/components/dashboard/TradeDistribution";
+import { TradesTable } from "@/components/dashboard/TradesTable";
+import { PeriodAnalysis } from "@/components/dashboard/PeriodAnalysis";
+import { PerformanceSummary } from "@/components/dashboard/PerformanceSummary";
+import { ExpectancyCurve } from "@/components/dashboard/ExpectancyCurve";
+import { StreakAnalysis } from "@/components/dashboard/StreakAnalysis";
+import { RollingSharpe } from "@/components/dashboard/RollingSharpe";
+import { MonteCarloChart } from "@/components/dashboard/MonteCarloChart";
+import { RROptimizer } from "@/components/dashboard/RROptimizer";
+import { RobustnessScore } from "@/components/dashboard/RobustnessScore";
+import { WalkForwardChart } from "@/components/dashboard/WalkForwardChart";
+import { CorrelationMatrix } from "@/components/portfolio/CorrelationMatrix";
+import { PortfolioRiskAssessment } from "@/components/portfolio/PortfolioRiskAssessment";
 import { EquityPoint } from "@/types";
 import { useState, useMemo } from "react";
 import { ArrowLeft, Plus, X, Pencil, Check, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { CorrelationMatrix } from "@/components/portfolio/CorrelationMatrix";
-import { PortfolioRiskAssessment } from "@/components/portfolio/PortfolioRiskAssessment";
 
 const PortfolioDetail = () => {
   const { id } = useParams();
@@ -50,6 +64,71 @@ const PortfolioDetail = () => {
     return allStrategies.filter((s) => !memberIds.has(s.id));
   }, [portfolio, allStrategies]);
 
+  // Time-based equity curve merge
+  const combinedCurve = useMemo<EquityPoint[]>(() => {
+    if (memberStrategies.length === 0) return [];
+    const totalWeight = memberStrategies.reduce((a, s) => a + s.weight, 0) || 1;
+
+    // Build sorted equity maps per strategy
+    const strategyMaps = memberStrategies.map((s) => {
+      const w = s.weight / totalWeight;
+      // sorted by timestamp
+      const sorted = [...s.equityCurve].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      return { sorted, weight: w };
+    });
+
+    // Collect all unique timestamps across all strategies
+    const tsSet = new Set<string>();
+    strategyMaps.forEach(({ sorted }) => sorted.forEach((p) => tsSet.add(p.timestamp)));
+    const allTimestamps = Array.from(tsSet).sort();
+
+    if (allTimestamps.length === 0) return [];
+
+    // For each strategy, build a quick lookup index
+    const curve: EquityPoint[] = [];
+    const lastKnown = new Array(strategyMaps.length).fill(0); // carry-forward equity per strategy
+    const pointers = new Array(strategyMaps.length).fill(0); // current index into each sorted array
+
+    let peak = 0;
+
+    for (const ts of allTimestamps) {
+      let equity = 0;
+      for (let si = 0; si < strategyMaps.length; si++) {
+        const { sorted, weight } = strategyMaps[si];
+        // Advance pointer to the latest point <= ts
+        while (
+          pointers[si] < sorted.length &&
+          sorted[pointers[si]].timestamp <= ts
+        ) {
+          lastKnown[si] = sorted[pointers[si]].equity;
+          pointers[si]++;
+        }
+        equity += lastKnown[si] * weight;
+      }
+      peak = Math.max(peak, equity);
+      const drawdown = peak > 0 ? +((peak - equity) / peak).toFixed(4) : 0;
+      curve.push({ timestamp: ts, equity: +equity.toFixed(2), drawdown });
+    }
+
+    return curve;
+  }, [memberStrategies]);
+
+  // Aggregated trades (all member strategies combined)
+  const allTrades = useMemo(
+    () => memberStrategies.flatMap((s) => s.trades).sort((a, b) => a.entryTime.localeCompare(b.entryTime)),
+    [memberStrategies]
+  );
+
+  const portfolioMetrics = useMemo(
+    () => calculateMetrics(allTrades, combinedCurve),
+    [allTrades, combinedCurve]
+  );
+
+  const monthlyReturns = useMemo(
+    () => getMonthlyReturns(combinedCurve),
+    [combinedCurve]
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -66,25 +145,6 @@ const PortfolioDetail = () => {
     );
   }
 
-  // Combined equity curve
-  const totalWeight = memberStrategies.reduce((a, s) => a + s.weight, 0) || 1;
-  const maxLen = Math.max(0, ...memberStrategies.map((s) => s.equityCurve.length));
-  const combinedCurve: EquityPoint[] = [];
-  for (let i = 0; i < maxLen; i++) {
-    let equity = 0;
-    let timestamp = "";
-    memberStrategies.forEach((s) => {
-      const w = s.weight / totalWeight;
-      const point = s.equityCurve[Math.min(i, s.equityCurve.length - 1)];
-      if (point) {
-        equity += point.equity * w;
-        if (!timestamp) timestamp = point.timestamp;
-      }
-    });
-    const peak = Math.max(equity, ...combinedCurve.map((c) => c.equity), equity);
-    combinedCurve.push({ timestamp, equity: +equity.toFixed(2), drawdown: +((peak - equity) / peak).toFixed(4) });
-  }
-
   const startEditName = () => {
     setNameInput(portfolio.name);
     setEditingName(true);
@@ -99,6 +159,7 @@ const PortfolioDetail = () => {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
         <Link to="/portfolio" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 mb-2">
           <ArrowLeft className="h-3 w-3" /> Back to Portfolios
@@ -151,43 +212,7 @@ const PortfolioDetail = () => {
         </div>
       </div>
 
-      {memberStrategies.length > 0 && (() => {
-        const allTrades = memberStrategies.flatMap((s) => s.trades);
-        const pm = calculateMetrics(allTrades, combinedCurve);
-        return (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="bg-card border-border">
-              <CardContent className="pt-4 pb-3 px-4">
-                <p className="text-xs text-muted-foreground font-mono">TOTAL RETURN</p>
-                <p className={`text-lg font-bold font-mono ${pm.totalReturn >= 0 ? "text-profit" : "text-loss"}`}>
-                  ${pm.totalReturn.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card border-border">
-              <CardContent className="pt-4 pb-3 px-4">
-                <p className="text-xs text-muted-foreground font-mono">SHARPE RATIO</p>
-                <p className="text-lg font-bold font-mono">{pm.sharpeRatio.toFixed(2)}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card border-border">
-              <CardContent className="pt-4 pb-3 px-4">
-                <p className="text-xs text-muted-foreground font-mono">MAX DRAWDOWN</p>
-                <p className="text-lg font-bold font-mono text-loss">
-                  ${pm.maxDrawdown.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card border-border">
-              <CardContent className="pt-4 pb-3 px-4">
-                <p className="text-xs text-muted-foreground font-mono">WIN RATE</p>
-                <p className="text-lg font-bold font-mono">{pm.winRate.toFixed(1)}%</p>
-              </CardContent>
-            </Card>
-          </div>
-        );
-      })()}
-
+      {/* Strategy weight cards */}
       {memberStrategies.length === 0 ? (
         <Card className="bg-card border-border">
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
@@ -233,9 +258,58 @@ const PortfolioDetail = () => {
               );
             })}
           </div>
-          <EquityCurve data={combinedCurve} title="Combined Portfolio Equity" />
-          <CorrelationMatrix strategies={memberStrategies} />
-          <PortfolioRiskAssessment strategies={memberStrategies} />
+
+          {/* Full analysis tabs */}
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="bg-muted">
+              <TabsTrigger value="overview" className="text-xs font-mono">Overview</TabsTrigger>
+              <TabsTrigger value="analysis" className="text-xs font-mono">Analysis</TabsTrigger>
+              <TabsTrigger value="performance" className="text-xs font-mono">Performance</TabsTrigger>
+              <TabsTrigger value="robustness" className="text-xs font-mono">Robustness</TabsTrigger>
+              <TabsTrigger value="tradelog" className="text-xs font-mono">Trade Log</TabsTrigger>
+              <TabsTrigger value="composition" className="text-xs font-mono">Composition</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview" className="space-y-4 mt-4">
+              <MetricsGrid metrics={portfolioMetrics} />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <EquityCurve data={combinedCurve} title="Combined Portfolio Equity" />
+                <TradeDistribution trades={allTrades} />
+              </div>
+              <MonthlyHeatmap data={monthlyReturns} />
+            </TabsContent>
+
+            <TabsContent value="analysis" className="mt-4">
+              <PeriodAnalysis trades={allTrades} />
+            </TabsContent>
+
+            <TabsContent value="performance" className="space-y-4 mt-4">
+              <PerformanceSummary trades={allTrades} equityCurve={combinedCurve} />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <ExpectancyCurve trades={allTrades} />
+                <RollingSharpe trades={allTrades} />
+              </div>
+              <StreakAnalysis trades={allTrades} />
+            </TabsContent>
+
+            <TabsContent value="robustness" className="space-y-4 mt-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <MonteCarloChart trades={allTrades} />
+                <RobustnessScore trades={allTrades} equityCurve={combinedCurve} />
+              </div>
+              <RROptimizer trades={allTrades} />
+              <WalkForwardChart trades={allTrades} equityCurve={combinedCurve} />
+            </TabsContent>
+
+            <TabsContent value="tradelog" className="mt-4">
+              <TradesTable trades={allTrades} />
+            </TabsContent>
+
+            <TabsContent value="composition" className="space-y-4 mt-4">
+              <CorrelationMatrix strategies={memberStrategies} />
+              <PortfolioRiskAssessment strategies={memberStrategies} />
+            </TabsContent>
+          </Tabs>
         </>
       )}
 
