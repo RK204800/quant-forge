@@ -21,6 +21,11 @@ import { toast } from "sonner";
 
 const STRATEGY_CLASSES = ["RSI Strategy", "Breakout", "Mean Reversion", "ML Model", "A/D Strategy", "Momentum", "Scalping", "Custom"];
 
+function safeFmt(v: number, decimals = 2): string {
+  if (!isFinite(v) || isNaN(v)) return "—";
+  return v.toFixed(decimals);
+}
+
 function getMetricValue(metrics: StrategyMetrics, field: SortField): number {
   switch (field) {
     case "profitFactor": return metrics.profitFactor;
