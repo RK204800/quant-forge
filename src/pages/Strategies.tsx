@@ -407,7 +407,7 @@ const Strategies = () => {
                               <div className="flex items-center gap-6 shrink-0">
                                 <div className="text-right">
                                   <p className="text-xs text-muted-foreground">PF</p>
-                                  <p className="text-sm font-mono font-bold">{m.profitFactor.toFixed(2)}</p>
+                                  <p className="text-sm font-mono font-bold">{safeFmt(m.profitFactor)}</p>
                                 </div>
                                 <div className="text-right">
                                   <p className="text-xs text-muted-foreground">Return</p>
