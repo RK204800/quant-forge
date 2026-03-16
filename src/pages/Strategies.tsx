@@ -415,7 +415,7 @@ const Strategies = () => {
                                 </div>
                                 <div className="text-right">
                                   <p className="text-xs text-muted-foreground">Sharpe</p>
-                                  <p className="text-sm font-mono font-bold">{m.sharpeRatio.toFixed(2)}</p>
+                                  <p className="text-sm font-mono font-bold">{safeFmt(m.sharpeRatio)}</p>
                                 </div>
                                 <div className="text-right">
                                   <p className="text-xs text-muted-foreground">Win Rate</p>
