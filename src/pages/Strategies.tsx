@@ -54,7 +54,7 @@ const Strategies = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editClass, setEditClass] = useState("");
-  const [sortField, setSortField] = useState<SortField>("profitFactor");
+  const [sortField, setSortField] = useState<SortField>("dateAdded");
   const [filters, setFilters] = useState<FilterState>({
     classes: [], timeframes: [], engines: [], assetClasses: [], statuses: [], tagIds: [], favoritesOnly: false, quickFilter: "none",
   });
