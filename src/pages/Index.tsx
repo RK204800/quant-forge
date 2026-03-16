@@ -168,7 +168,7 @@ const Index = () => {
                         </div>
                         <div>
                           <span className="text-muted-foreground">Win Rate</span>
-                          <p className="font-medium">{m.winRate.toFixed(1)}%</p>
+                          <p className="font-medium">{safeFmt(m.winRate, 1)}%</p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Max DD</span>

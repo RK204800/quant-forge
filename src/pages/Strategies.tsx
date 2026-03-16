@@ -419,7 +419,7 @@ const Strategies = () => {
                                 </div>
                                 <div className="text-right">
                                   <p className="text-xs text-muted-foreground">Win Rate</p>
-                                  <p className="text-sm font-mono font-bold">{m.winRate.toFixed(1)}%</p>
+                                  <p className="text-sm font-mono font-bold">{safeFmt(m.winRate, 1)}%</p>
                                 </div>
 
                                 {/* Per-card action menu */}
