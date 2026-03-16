@@ -147,13 +147,10 @@ const UploadStrategy = () => {
     }
 
     setSaving(false);
-    setTimeout(() => {
-      setQueue((prev) => {
-        const allDone = prev.every((q) => q.status === "saved");
-        if (allDone) navigate("/strategies");
-        return prev;
-      });
-    }, 500);
+    const allDone = queue.every((q) => q.status === "saved" || pending.find((p) => p.id === q.id));
+    if (allDone) {
+      navigate("/strategies");
+    }
   };
 
   const pendingCount = queue.filter((q) => q.status === "pending").length;
