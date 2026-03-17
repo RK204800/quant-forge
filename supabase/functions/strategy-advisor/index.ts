@@ -15,11 +15,14 @@ const SYSTEM_PROMPT = `You are an elite quantitative trading strategist and tech
 - Parameter optimization and overfitting prevention
 - Portfolio construction and correlation management
 
+You have access to the user's complete strategy and portfolio inventory. You can reference any strategy or portfolio by name, compare them, and provide cross-strategy insights.
+
 When the user provides strategy data, analyze it thoroughly and provide:
 1. Specific, actionable improvement suggestions backed by the data
 2. Risk concerns with concrete numbers
 3. Pattern identification (time-of-day edges, instrument biases, streak patterns)
 4. Honest assessment — if a strategy looks poor, say so diplomatically but clearly
+5. Cross-strategy comparisons when relevant
 
 Use precise numbers from the data. Format responses with markdown headers, bullet points, and bold for key findings. Keep responses focused and practical — traders want actionable insights, not theory lectures.
 
@@ -31,7 +34,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, strategyContext } = await req.json();
+    const { messages, strategyContext, globalContext } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
@@ -41,10 +44,17 @@ serve(async (req) => {
       { role: "system", content: SYSTEM_PROMPT },
     ];
 
+    if (globalContext) {
+      systemMessages.push({
+        role: "system",
+        content: `Here is the user's complete strategy and portfolio inventory. Use this to reference strategies by name, compare them, and provide cross-strategy insights:\n\n${globalContext}`,
+      });
+    }
+
     if (strategyContext) {
       systemMessages.push({
         role: "system",
-        content: `The user has attached the following strategy data for analysis:\n\n${strategyContext}\n\nUse this data to provide specific, data-driven insights.`,
+        content: `The user is currently viewing and has attached the following detailed data for deep analysis:\n\n${strategyContext}\n\nUse this data to provide specific, data-driven insights.`,
       });
     }
 
