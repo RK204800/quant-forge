@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createChart, ColorType, IChartApi, CandlestickData, Time, CandlestickSeries, createSeriesMarkers } from "lightweight-charts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trade } from "@/types";
+import { getESTDateKey } from "@/lib/timezone";
 
 interface TradeChartProps {
   trades: Trade[];
