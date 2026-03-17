@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { Plus, Briefcase, ArrowRight } from "lucide-react";
-import { format } from "date-fns";
+import { formatEST } from "@/lib/timezone";
 
 const Portfolio = () => {
   const { data: portfolios = [], isLoading } = usePortfolios();
