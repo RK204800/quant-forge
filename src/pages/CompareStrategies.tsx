@@ -208,7 +208,7 @@ const CompareStrategies = () => {
       sorted.forEach((p) => {
         if (p.equity > peak) peak = p.equity;
         const dd = peak > 0 ? -((peak - p.equity) / peak) * 100 : 0;
-        const dateKey = format(new Date(p.timestamp), "yyyy-MM-dd");
+        const dateKey = getESTDateKey(p.timestamp);
         const row = allDates.get(dateKey) || {};
         row[s.id] = dd;
         allDates.set(dateKey, row);
@@ -218,7 +218,7 @@ const CompareStrategies = () => {
     return Array.from(allDates.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, values]) => ({
-        date: format(new Date(date), "MMM dd"),
+        date: formatEST(new Date(date), "MMM dd"),
         ...values,
       }));
   }, [selected]);
