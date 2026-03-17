@@ -1,7 +1,7 @@
 import { Trade } from "@/types";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { format } from "date-fns";
+import { formatEST } from "@/lib/timezone";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface TradePnlChartProps {
@@ -13,7 +13,7 @@ export function TradePnlChart({ trades }: TradePnlChartProps) {
   let cumPnl = 0;
   const chartData = sorted.map((t, i) => {
     cumPnl += t.pnlNet;
-    return { index: i + 1, pnl: t.pnlNet, cumPnl, date: format(new Date(t.exitTime), "MM/dd"), instrument: t.instrument, commission: t.commission };
+    return { index: i + 1, pnl: t.pnlNet, cumPnl, date: formatEST(t.exitTime, "MM/dd"), instrument: t.instrument, commission: t.commission };
   });
 
   return (

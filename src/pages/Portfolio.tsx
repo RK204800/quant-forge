@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { Plus, Briefcase, ArrowRight } from "lucide-react";
-import { format } from "date-fns";
+import { formatEST } from "@/lib/timezone";
 
 const Portfolio = () => {
   const { data: portfolios = [], isLoading } = usePortfolios();
@@ -65,7 +65,7 @@ const Portfolio = () => {
                 <CardContent>
                   <div className="flex items-center justify-between text-xs font-mono">
                     <span className="text-muted-foreground">{p.strategyCount} strategies</span>
-                    <span className="text-muted-foreground">{format(new Date(p.createdAt), "MMM d, yyyy")}</span>
+                    <span className="text-muted-foreground">{formatEST(p.createdAt, "MMM d, yyyy")}</span>
                   </div>
                   <div className="flex items-center gap-1 mt-3 text-xs text-primary">
                     View <ArrowRight className="h-3 w-3" />

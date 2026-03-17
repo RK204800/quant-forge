@@ -12,7 +12,8 @@ import { jsPDF } from "jspdf";
 import { Link, useSearchParams } from "react-router-dom";
 import { Strategy, StrategyMetrics, EquityPoint } from "@/types";
 import { Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, BarChart, ReferenceLine } from "recharts";
-import { format } from "date-fns";
+import { formatEST } from "@/lib/timezone";
+import { getESTDateKey } from "@/lib/timezone";
 
 const COLORS = [
   "hsl(142 70% 45%)",
@@ -90,7 +91,7 @@ const CompareStrategies = () => {
     try {
       const canvas = await html2canvas(contentRef.current, { backgroundColor: "#0a0a0f", scale: 2, useCORS: true });
       const link = document.createElement("a");
-      link.download = `strategy-comparison-${format(new Date(), "yyyy-MM-dd")}.png`;
+      link.download = `strategy-comparison-${formatEST(new Date(), "yyyy-MM-dd")}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
     } finally { setExporting(false); }
@@ -108,7 +109,7 @@ const CompareStrategies = () => {
       const pdfH = (imgH * pdfW) / imgW;
       const pdf = new jsPDF({ orientation: pdfH > 420 ? "portrait" : "landscape", unit: "mm", format: [pdfW, pdfH] });
       pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
-      pdf.save(`strategy-comparison-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+      pdf.save(`strategy-comparison-${formatEST(new Date(), "yyyy-MM-dd")}.pdf`);
     } finally { setExporting(false); }
   }, []);
 
@@ -150,7 +151,7 @@ const CompareStrategies = () => {
       if (sorted.length === 0) return;
       const startEquity = sorted[0].equity;
       sorted.forEach((p) => {
-        const dateKey = format(new Date(p.timestamp), "yyyy-MM-dd");
+        const dateKey = getESTDateKey(p.timestamp);
         const row = allDates.get(dateKey) || {};
         // Normalize to percentage return from start
         row[s.id] = startEquity > 0 ? ((p.equity - startEquity) / startEquity) * 100 : 0;
@@ -161,7 +162,7 @@ const CompareStrategies = () => {
     return Array.from(allDates.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, values]) => ({
-        date: format(new Date(date), "MMM dd"),
+        date: formatEST(new Date(date), "MMM dd"),
         ...values,
       }));
   }, [selected]);
@@ -178,7 +179,7 @@ const CompareStrategies = () => {
       if (sorted.length === 0) return;
       const startEquity = sorted[0].equity;
       sorted.forEach((p) => {
-        const dateKey = format(new Date(p.timestamp), "yyyy-MM-dd");
+        const dateKey = getESTDateKey(p.timestamp);
         const row = allDates.get(dateKey) || {};
         row[s.id] = p.equity - startEquity;
         allDates.set(dateKey, row);
@@ -188,7 +189,7 @@ const CompareStrategies = () => {
     return Array.from(allDates.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, values]) => ({
-        date: format(new Date(date), "MMM dd"),
+        date: formatEST(new Date(date), "MMM dd"),
         ...values,
       }));
   }, [selected]);
@@ -207,7 +208,7 @@ const CompareStrategies = () => {
       sorted.forEach((p) => {
         if (p.equity > peak) peak = p.equity;
         const dd = peak > 0 ? -((peak - p.equity) / peak) * 100 : 0;
-        const dateKey = format(new Date(p.timestamp), "yyyy-MM-dd");
+        const dateKey = getESTDateKey(p.timestamp);
         const row = allDates.get(dateKey) || {};
         row[s.id] = dd;
         allDates.set(dateKey, row);
@@ -217,7 +218,7 @@ const CompareStrategies = () => {
     return Array.from(allDates.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, values]) => ({
-        date: format(new Date(date), "MMM dd"),
+        date: formatEST(new Date(date), "MMM dd"),
         ...values,
       }));
   }, [selected]);
@@ -273,7 +274,7 @@ const CompareStrategies = () => {
       const sorted = [...s.equityCurve].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       const daily = new Map<string, number>();
       for (let i = 1; i < sorted.length; i++) {
-        const dateKey = format(new Date(sorted[i].timestamp), "yyyy-MM-dd");
+        const dateKey = getESTDateKey(sorted[i].timestamp);
         const ret = sorted[i - 1].equity !== 0 ? (sorted[i].equity - sorted[i - 1].equity) / sorted[i - 1].equity : 0;
         daily.set(dateKey, ret);
       }
@@ -323,7 +324,7 @@ const CompareStrategies = () => {
       // Group equity by month, take first and last per month
       const byMonth = new Map<string, { first: number; last: number }>();
       sorted.forEach((p) => {
-        const mk = format(new Date(p.timestamp), "yyyy-MM");
+        const mk = formatEST(p.timestamp, "yyyy-MM");
         const entry = byMonth.get(mk);
         if (!entry) byMonth.set(mk, { first: p.equity, last: p.equity });
         else entry.last = p.equity;
@@ -751,7 +752,7 @@ const CompareStrategies = () => {
                       <th className="text-left text-xs text-muted-foreground font-mono py-2 pr-3 sticky left-0 bg-card" />
                       {monthlyReturnsData.months.map((m) => (
                         <th key={m} className="text-center text-[10px] font-mono text-muted-foreground py-2 px-2 min-w-[60px]">
-                          {format(new Date(m + "-01"), "MMM yy")}
+                          {formatEST(new Date(m + "-01"), "MMM yy")}
                         </th>
                       ))}
                     </tr>

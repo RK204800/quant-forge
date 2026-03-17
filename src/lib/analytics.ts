@@ -1,4 +1,5 @@
 import { Trade, StrategyMetrics, ExtendedMetrics, EquityPoint, MonthlyReturn } from "@/types";
+import { getESTHour, getESTMinutes, getESTDayOfWeek, getESTDateKey, getESTYearMonth, formatEST } from "@/lib/timezone";
 
 const RISK_FREE_RATE = 0.04;
 const TRADING_DAYS = 252;
@@ -225,9 +226,9 @@ function computeMaxRecoveryDays(curve: EquityPoint[]): number {
 export function groupByTimeOfDay(trades: Trade[], useEntryTime = false): Map<string, Trade[]> {
   const groups = new Map<string, Trade[]>();
   trades.forEach((t) => {
-    const d = new Date(useEntryTime ? t.entryTime : t.exitTime);
-    const h = d.getHours();
-    const m = d.getMinutes() < 30 ? 0 : 30;
+    const timeStr = useEntryTime ? t.entryTime : t.exitTime;
+    const h = getESTHour(timeStr);
+    const m = getESTMinutes(timeStr) < 30 ? 0 : 30;
     const key = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
     const arr = groups.get(key) || [];
     arr.push(t);
@@ -240,7 +241,7 @@ export function groupByDayOfWeek(trades: Trade[]): Map<string, Trade[]> {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const groups = new Map<string, Trade[]>();
   trades.forEach((t) => {
-    const key = days[new Date(t.exitTime).getDay()];
+    const key = days[getESTDayOfWeek(t.exitTime)];
     const arr = groups.get(key) || [];
     arr.push(t);
     groups.set(key, arr);
@@ -251,16 +252,19 @@ export function groupByDayOfWeek(trades: Trade[]): Map<string, Trade[]> {
 export function groupByPeriod(trades: Trade[], period: "daily" | "weekly" | "monthly"): Map<string, Trade[]> {
   const groups = new Map<string, Trade[]>();
   trades.forEach((t) => {
-    const d = new Date(t.exitTime);
     let key: string;
     if (period === "daily") {
-      key = d.toISOString().slice(0, 10);
+      key = getESTDateKey(t.exitTime);
     } else if (period === "weekly") {
-      const startOfWeek = new Date(d);
-      startOfWeek.setDate(d.getDate() - d.getDay());
-      key = startOfWeek.toISOString().slice(0, 10);
+      // Get EST date key, then find start of week
+      const estDateStr = getESTDateKey(t.exitTime);
+      const dow = getESTDayOfWeek(t.exitTime);
+      const d = new Date(estDateStr);
+      d.setDate(d.getDate() - dow);
+      key = d.toISOString().slice(0, 10);
     } else {
-      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const { year, month } = getESTYearMonth(t.exitTime);
+      key = `${year}-${String(month + 1).padStart(2, "0")}`;
     }
     const arr = groups.get(key) || [];
     arr.push(t);
@@ -286,9 +290,9 @@ export function getMonthlyReturns(equityCurve: EquityPoint[]): MonthlyReturn[] {
   if (equityCurve.length < 2) return [];
   const monthly: Record<string, { start: number; end: number; year: number; month: number }> = {};
   equityCurve.forEach((p) => {
-    const d = new Date(p.timestamp);
-    const key = `${d.getFullYear()}-${d.getMonth()}`;
-    if (!monthly[key]) monthly[key] = { start: p.equity, end: p.equity, year: d.getFullYear(), month: d.getMonth() };
+    const { year, month } = getESTYearMonth(p.timestamp);
+    const key = `${year}-${month}`;
+    if (!monthly[key]) monthly[key] = { start: p.equity, end: p.equity, year, month };
     monthly[key].end = p.equity;
   });
   // Use absolute dollar difference instead of percentage (safe for $0-start curves)
@@ -306,7 +310,7 @@ function getResampledDailyReturns(curve: EquityPoint[]): number[] {
   const sorted = [...curve].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   const equityByDate = new Map<string, number>();
   sorted.forEach((p) => {
-    const dateKey = new Date(p.timestamp).toISOString().slice(0, 10);
+    const dateKey = getESTDateKey(p.timestamp);
     equityByDate.set(dateKey, p.equity);
   });
   const firstDate = new Date(sorted[0].timestamp);

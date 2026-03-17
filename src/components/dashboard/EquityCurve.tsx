@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EquityPoint } from "@/types";
 import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, ReferenceLine } from "recharts";
-import { format } from "date-fns";
+import { formatEST } from "@/lib/timezone";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 interface EquityCurveProps {
@@ -60,8 +60,8 @@ export function EquityCurve({ data, title = "Equity Curve" }: EquityCurveProps) 
     const dailyReturn = prevEq !== 0 ? ((eq - prevEq) / Math.abs(prevEq)) * 100 : 0;
 
     return {
-      date: format(new Date(d.timestamp), dateFmt),
-      fullDate: format(new Date(d.timestamp), "MMM dd, yyyy"),
+      date: formatEST(d.timestamp, dateFmt),
+      fullDate: formatEST(d.timestamp, "MMM dd, yyyy") + " ET",
       equity: eq,
       equityPos: Math.max(eq, 0),
       equityNeg: Math.min(eq, 0),

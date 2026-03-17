@@ -1,3 +1,5 @@
+import { estToUTCISO } from "@/lib/timezone";
+
 /**
  * Safely parse a value to a finite number, returning fallback if unparseable.
  */
@@ -47,8 +49,8 @@ export function normalizeDateTime(dt: string): string | null {
         if (ampm.toUpperCase() === "PM" && hour < 12) hour += 12;
         if (ampm.toUpperCase() === "AM" && hour === 12) hour = 0;
       }
-      const date = new Date(year, mon, Number(dayStr), hour, Number(minStr), Number(sStr));
-      if (!isNaN(date.getTime())) return date.toISOString();
+      // Treat ambiguous dates as EST
+      return estToUTCISO(year, mon, Number(dayStr), hour, Number(minStr), Number(sStr));
     }
   }
 
@@ -65,8 +67,8 @@ export function normalizeDateTime(dt: string): string | null {
       if (ampm.toUpperCase() === "PM" && hour < 12) hour += 12;
       if (ampm.toUpperCase() === "AM" && hour === 12) hour = 0;
     }
-    const date = new Date(Number(y), Number(m) - 1, Number(d), hour, Number(min), Number(s));
-    if (!isNaN(date.getTime())) return date.toISOString();
+    // Treat ambiguous dates as EST
+    return estToUTCISO(Number(y), Number(m) - 1, Number(d), hour, Number(min), Number(s));
   }
 
   // DD/MM/YYYY with optional time and AM/PM
@@ -79,8 +81,8 @@ export function normalizeDateTime(dt: string): string | null {
         if (ampm.toUpperCase() === "PM" && hour < 12) hour += 12;
         if (ampm.toUpperCase() === "AM" && hour === 12) hour = 0;
       }
-      const date = new Date(Number(y), Number(m) - 1, Number(d), hour, Number(min), Number(s));
-      if (!isNaN(date.getTime())) return date.toISOString();
+      // Treat ambiguous dates as EST
+      return estToUTCISO(Number(y), Number(m) - 1, Number(d), hour, Number(min), Number(s));
     }
   }
 

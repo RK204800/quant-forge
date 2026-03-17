@@ -2,7 +2,7 @@ import { Trade, EquityPoint, ExtendedMetrics } from "@/types";
 import { calculateMetricsByDirection } from "@/lib/analytics";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { format } from "date-fns";
+import { formatEST } from "@/lib/timezone";
 
 interface PerformanceSummaryProps {
   trades: Trade[];
@@ -22,7 +22,7 @@ function formatVal(val: number, fmt: "dollar" | "pct" | "ratio" | "int" | "days"
 
 function formatDate(d: string): string {
   if (!d) return "—";
-  try { return format(new Date(d), "MMM dd, yyyy"); } catch { return "—"; }
+  return formatEST(d, "MMM dd, yyyy") + " ET";
 }
 
 interface MetricRow {

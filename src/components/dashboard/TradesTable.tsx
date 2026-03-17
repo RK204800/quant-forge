@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trade } from "@/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
+import { formatEST } from "@/lib/timezone";
 import { useState } from "react";
 
 interface TradesTableProps {
@@ -70,8 +70,8 @@ export function TradesTable({ trades }: TradesTableProps) {
                         {trade.direction.toUpperCase()}
                       </Badge>
                     </TableCell>
-                    <TableCell className="py-2">{format(new Date(trade.entryTime), "MM/dd HH:mm")}</TableCell>
-                    <TableCell className="py-2">{format(new Date(trade.exitTime), "MM/dd HH:mm")}</TableCell>
+                    <TableCell className="py-2">{formatEST(trade.entryTime, "MM/dd HH:mm")}</TableCell>
+                    <TableCell className="py-2">{formatEST(trade.exitTime, "MM/dd HH:mm")}</TableCell>
                     <TableCell className="py-2 text-right">{isFinite(trade.entryPrice) ? trade.entryPrice.toFixed(2) : "N/A"}</TableCell>
                     <TableCell className="py-2 text-right">{isFinite(trade.exitPrice) ? trade.exitPrice.toFixed(2) : "N/A"}</TableCell>
                     <TableCell className="py-2 text-right">{isFinite(trade.quantity) ? trade.quantity : "N/A"}</TableCell>
