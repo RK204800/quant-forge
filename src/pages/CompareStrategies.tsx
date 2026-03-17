@@ -91,7 +91,7 @@ const CompareStrategies = () => {
     try {
       const canvas = await html2canvas(contentRef.current, { backgroundColor: "#0a0a0f", scale: 2, useCORS: true });
       const link = document.createElement("a");
-      link.download = `strategy-comparison-${format(new Date(), "yyyy-MM-dd")}.png`;
+      link.download = `strategy-comparison-${formatEST(new Date(), "yyyy-MM-dd")}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
     } finally { setExporting(false); }
