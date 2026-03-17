@@ -290,9 +290,9 @@ export function getMonthlyReturns(equityCurve: EquityPoint[]): MonthlyReturn[] {
   if (equityCurve.length < 2) return [];
   const monthly: Record<string, { start: number; end: number; year: number; month: number }> = {};
   equityCurve.forEach((p) => {
-    const d = new Date(p.timestamp);
-    const key = `${d.getFullYear()}-${d.getMonth()}`;
-    if (!monthly[key]) monthly[key] = { start: p.equity, end: p.equity, year: d.getFullYear(), month: d.getMonth() };
+    const { year, month } = getESTYearMonth(p.timestamp);
+    const key = `${year}-${month}`;
+    if (!monthly[key]) monthly[key] = { start: p.equity, end: p.equity, year, month };
     monthly[key].end = p.equity;
   });
   // Use absolute dollar difference instead of percentage (safe for $0-start curves)
