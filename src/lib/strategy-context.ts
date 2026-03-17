@@ -6,7 +6,7 @@ export function buildStrategyContext(strategy: Strategy): string {
   if (!trades.length) return `Strategy "${strategy.name}" has no trades yet.`;
 
   const m = calculateMetrics(trades, equityCurve);
-  const monthly = getMonthlyReturns(trades);
+  const monthly = getMonthlyReturns(equityCurve);
 
   const wins = trades.filter(t => t.pnlNet > 0);
   const losses = trades.filter(t => t.pnlNet < 0);
