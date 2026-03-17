@@ -274,7 +274,7 @@ const CompareStrategies = () => {
       const sorted = [...s.equityCurve].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       const daily = new Map<string, number>();
       for (let i = 1; i < sorted.length; i++) {
-        const dateKey = format(new Date(sorted[i].timestamp), "yyyy-MM-dd");
+        const dateKey = getESTDateKey(sorted[i].timestamp);
         const ret = sorted[i - 1].equity !== 0 ? (sorted[i].equity - sorted[i - 1].equity) / sorted[i - 1].equity : 0;
         daily.set(dateKey, ret);
       }
