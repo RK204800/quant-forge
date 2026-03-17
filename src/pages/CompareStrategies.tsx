@@ -324,7 +324,7 @@ const CompareStrategies = () => {
       // Group equity by month, take first and last per month
       const byMonth = new Map<string, { first: number; last: number }>();
       sorted.forEach((p) => {
-        const mk = format(new Date(p.timestamp), "yyyy-MM");
+        const mk = formatEST(p.timestamp, "yyyy-MM");
         const entry = byMonth.get(mk);
         if (!entry) byMonth.set(mk, { first: p.equity, last: p.equity });
         else entry.last = p.equity;
