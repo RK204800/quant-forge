@@ -49,8 +49,8 @@ export function normalizeDateTime(dt: string): string | null {
         if (ampm.toUpperCase() === "PM" && hour < 12) hour += 12;
         if (ampm.toUpperCase() === "AM" && hour === 12) hour = 0;
       }
-      const date = new Date(year, mon, Number(dayStr), hour, Number(minStr), Number(sStr));
-      if (!isNaN(date.getTime())) return date.toISOString();
+      // Treat ambiguous dates as EST
+      return estToUTCISO(year, mon, Number(dayStr), hour, Number(minStr), Number(sStr));
     }
   }
 
