@@ -12,7 +12,8 @@ import { jsPDF } from "jspdf";
 import { Link, useSearchParams } from "react-router-dom";
 import { Strategy, StrategyMetrics, EquityPoint } from "@/types";
 import { Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, BarChart, ReferenceLine } from "recharts";
-import { format } from "date-fns";
+import { formatEST } from "@/lib/timezone";
+import { getESTDateKey } from "@/lib/timezone";
 
 const COLORS = [
   "hsl(142 70% 45%)",
