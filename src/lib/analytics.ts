@@ -241,7 +241,7 @@ export function groupByDayOfWeek(trades: Trade[]): Map<string, Trade[]> {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const groups = new Map<string, Trade[]>();
   trades.forEach((t) => {
-    const key = days[new Date(t.exitTime).getDay()];
+    const key = days[getESTDayOfWeek(t.exitTime)];
     const arr = groups.get(key) || [];
     arr.push(t);
     groups.set(key, arr);
