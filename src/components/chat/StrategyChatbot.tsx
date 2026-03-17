@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { MessageCircle, X, Send, Loader2, Link2, Unlink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatMessage } from "./ChatMessage";
 import { useLocation, useParams } from "react-router-dom";
-import { useStrategy } from "@/hooks/use-strategies";
-import { buildStrategyContext } from "@/lib/strategy-context";
+import { useStrategy, useStrategies } from "@/hooks/use-strategies";
+import { usePortfolios, usePortfolio } from "@/hooks/use-portfolios";
+import { buildStrategyContext, buildGlobalContext, buildPortfolioContext } from "@/lib/strategy-context";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -16,12 +16,14 @@ const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/strategy-adv
 async function streamChat({
   messages,
   strategyContext,
+  globalContext,
   onDelta,
   onDone,
   onError,
 }: {
   messages: Msg[];
   strategyContext: string | null;
+  globalContext: string | null;
   onDelta: (text: string) => void;
   onDone: () => void;
   onError: (err: string) => void;
@@ -32,7 +34,7 @@ async function streamChat({
       "Content-Type": "application/json",
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
     },
-    body: JSON.stringify({ messages, strategyContext }),
+    body: JSON.stringify({ messages, strategyContext, globalContext }),
   });
 
   if (!resp.ok) {
@@ -107,19 +109,56 @@ export function StrategyChatbot() {
 
   const location = useLocation();
   const params = useParams<{ id: string }>();
-  const isStrategyPage = location.pathname.startsWith("/strategy/");
-  const strategyId = isStrategyPage ? params.id : undefined;
-  const { data: strategy } = useStrategy(strategyId);
 
-  const strategyContext = contextAttached && strategy
-    ? buildStrategyContext(strategy)
-    : null;
+  // Detect page type
+  const isStrategyPage = location.pathname.startsWith("/strategy/");
+  const isPortfolioPage = location.pathname.startsWith("/portfolio/");
+  const pageEntityId = (isStrategyPage || isPortfolioPage) ? params.id : undefined;
+
+  // Load current strategy (if on strategy page)
+  const { data: strategy } = useStrategy(isStrategyPage ? pageEntityId : undefined);
+
+  // Load current portfolio (if on portfolio page)
+  const { data: portfolio } = usePortfolio(isPortfolioPage ? pageEntityId : undefined);
+
+  // Load ALL strategies and portfolios for global context
+  const { data: allStrategies } = useStrategies();
+  const { data: allPortfolios } = usePortfolios();
+
+  // Build global context (compact inventory of everything)
+  const globalContext = React.useMemo(() => {
+    if (!allStrategies?.length && !allPortfolios?.length) return null;
+    return buildGlobalContext(allStrategies ?? [], allPortfolios ?? []);
+  }, [allStrategies, allPortfolios]);
+
+  // Build deep context for current page entity
+  const deepContext = React.useMemo(() => {
+    if (!contextAttached) return null;
+
+    if (isStrategyPage && strategy) {
+      return buildStrategyContext(strategy);
+    }
+
+    if (isPortfolioPage && portfolio && allStrategies) {
+      const members = portfolio.strategies.map(ps => {
+        const strat = allStrategies.find(s => s.id === ps.strategyId);
+        return strat ? { strategy: strat, weight: ps.weight } : null;
+      }).filter(Boolean) as { strategy: any; weight: number }[];
+      return buildPortfolioContext(portfolio.name, members);
+    }
+
+    return null;
+  }, [contextAttached, isStrategyPage, strategy, isPortfolioPage, portfolio, allStrategies]);
+
+  // Current entity name for display
+  const entityName = isStrategyPage ? strategy?.name : isPortfolioPage ? portfolio?.name : undefined;
+  const hasEntity = !!(strategy || portfolio);
 
   useEffect(() => {
-    if (isStrategyPage && strategy && !contextAttached) {
-      setContextAttached(true);
+    if ((isStrategyPage && strategy) || (isPortfolioPage && portfolio)) {
+      if (!contextAttached) setContextAttached(true);
     }
-  }, [isStrategyPage, strategy]);
+  }, [isStrategyPage, strategy, isPortfolioPage, portfolio]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -151,7 +190,8 @@ export function StrategyChatbot() {
     try {
       await streamChat({
         messages: [...messages, userMsg],
-        strategyContext,
+        strategyContext: deepContext,
+        globalContext,
         onDelta: upsert,
         onDone: () => setIsLoading(false),
         onError: (err) => {
@@ -163,7 +203,7 @@ export function StrategyChatbot() {
       toast.error("Failed to reach AI advisor");
       setIsLoading(false);
     }
-  }, [input, isLoading, messages, strategyContext]);
+  }, [input, isLoading, messages, deepContext, globalContext]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -195,13 +235,13 @@ export function StrategyChatbot() {
               <span className="font-semibold text-sm text-foreground">Strategy Advisor</span>
             </div>
             <div className="flex items-center gap-1">
-              {strategy && (
+              {hasEntity && (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => setContextAttached(!contextAttached)}
-                  title={contextAttached ? `Context: ${strategy.name} (click to detach)` : "Attach strategy context"}
+                  title={contextAttached ? `Context: ${entityName} (click to detach)` : "Attach context"}
                 >
                   {contextAttached ? (
                     <Link2 className="w-4 h-4 text-primary" />
@@ -217,10 +257,11 @@ export function StrategyChatbot() {
           </div>
 
           {/* Context chip */}
-          {contextAttached && strategy && (
+          {contextAttached && entityName && (
             <div className="px-4 py-1.5 border-b border-border bg-muted/50">
               <span className="text-xs text-muted-foreground">
-                Analyzing: <span className="font-medium text-foreground">{strategy.name}</span>
+                Analyzing: <span className="font-medium text-foreground">{entityName}</span>
+                {isPortfolioPage && " (portfolio)"}
               </span>
             </div>
           )}
@@ -230,15 +271,15 @@ export function StrategyChatbot() {
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground text-sm px-6 gap-3">
                 <MessageCircle className="w-10 h-10 opacity-30" />
-                <p>Ask me about your strategy's performance, risk management, or improvements.</p>
-                {strategy && !contextAttached && (
+                <p>Ask me about your strategies, portfolios, or trading improvements. I can see all your data.</p>
+                {hasEntity && !contextAttached && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setContextAttached(true)}
                     className="text-xs"
                   >
-                    <Link2 className="w-3 h-3 mr-1" /> Attach {strategy.name}
+                    <Link2 className="w-3 h-3 mr-1" /> Attach {entityName}
                   </Button>
                 )}
               </div>
@@ -262,7 +303,7 @@ export function StrategyChatbot() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask about your strategy…"
+                placeholder="Ask about your strategies…"
                 rows={1}
                 className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />

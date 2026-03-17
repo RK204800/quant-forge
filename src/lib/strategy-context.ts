@@ -1,5 +1,6 @@
 import { Strategy, Trade, EquityPoint } from "@/types";
 import { calculateMetrics, getMonthlyReturns } from "@/lib/analytics";
+import { PortfolioRow } from "@/hooks/use-portfolios";
 
 export function buildStrategyContext(strategy: Strategy): string {
   const { trades, equityCurve } = strategy;
@@ -114,6 +115,119 @@ export function buildStrategyContext(strategy: Strategy): string {
       lines.push(`${k}: ${JSON.stringify(v)}`);
     }
   }
+
+  return lines.join("\n");
+}
+
+/**
+ * Build a compact inventory of ALL strategies and portfolios the user owns.
+ * Sent as global context so the AI can reference any by name.
+ */
+export function buildGlobalContext(
+  strategies: Strategy[],
+  portfolios: PortfolioRow[],
+  portfolioMemberships?: Record<string, { strategyId: string; weight: number }[]>
+): string {
+  if (!strategies.length && !portfolios.length) return "";
+
+  const lines: string[] = ["# User's Complete Inventory", ""];
+
+  // Strategy inventory — one line each
+  if (strategies.length) {
+    lines.push(`## Strategies (${strategies.length} total)`, "");
+    for (const s of strategies) {
+      const trades = s.trades;
+      const totalPnl = trades.reduce((sum, t) => sum + t.pnlNet, 0);
+      const winCount = trades.filter(t => t.pnlNet > 0).length;
+      const winRate = trades.length ? ((winCount / trades.length) * 100).toFixed(1) : "0.0";
+
+      let sharpe = "N/A";
+      try {
+        if (trades.length >= 2 && s.equityCurve.length >= 2) {
+          const m = calculateMetrics(trades, s.equityCurve);
+          sharpe = m.sharpeRatio.toFixed(2);
+        }
+      } catch {}
+
+      lines.push(
+        `- **${s.name}** [${s.status}]: ${trades.length} trades, PnL $${totalPnl.toFixed(2)}, WR ${winRate}%, Sharpe ${sharpe}, ${s.assetClass || "N/A"} ${s.timeframe || ""}`
+      );
+    }
+  }
+
+  // Portfolio inventory
+  if (portfolios.length) {
+    lines.push("", `## Portfolios (${portfolios.length} total)`, "");
+    for (const p of portfolios) {
+      const members = portfolioMemberships?.[p.id];
+      if (members?.length) {
+        const memberNames = members
+          .map(m => {
+            const strat = strategies.find(s => s.id === m.strategyId);
+            return strat ? `${strat.name} (${m.weight}%)` : `unknown (${m.weight}%)`;
+          })
+          .join(", ");
+        lines.push(`- **${p.name}**: ${members.length} strategies — ${memberNames}`);
+      } else {
+        lines.push(`- **${p.name}**: ${p.strategyCount} strategies`);
+      }
+    }
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Build detailed context for a portfolio — aggregates trades from member strategies.
+ */
+export function buildPortfolioContext(
+  portfolioName: string,
+  memberStrategies: { strategy: Strategy; weight: number }[]
+): string {
+  if (!memberStrategies.length) return `Portfolio "${portfolioName}" has no strategies.`;
+
+  const allTrades = memberStrategies.flatMap(ms => ms.strategy.trades);
+  if (!allTrades.length) return `Portfolio "${portfolioName}" has strategies but no trades yet.`;
+
+  const totalPnl = allTrades.reduce((s, t) => s + t.pnlNet, 0);
+  const wins = allTrades.filter(t => t.pnlNet > 0);
+  const losses = allTrades.filter(t => t.pnlNet < 0);
+  const winRate = allTrades.length ? ((wins.length / allTrades.length) * 100).toFixed(1) : "0.0";
+  const avgWin = wins.length ? (wins.reduce((s, t) => s + t.pnlNet, 0) / wins.length).toFixed(2) : "0.00";
+  const avgLoss = losses.length ? (losses.reduce((s, t) => s + t.pnlNet, 0) / losses.length).toFixed(2) : "0.00";
+
+  const lines = [
+    `# Portfolio: ${portfolioName}`,
+    "",
+    "## Composition",
+  ];
+
+  for (const ms of memberStrategies) {
+    const sPnl = ms.strategy.trades.reduce((s, t) => s + t.pnlNet, 0);
+    lines.push(`- ${ms.strategy.name}: weight ${ms.weight}%, ${ms.strategy.trades.length} trades, PnL $${sPnl.toFixed(2)}`);
+  }
+
+  lines.push(
+    "",
+    "## Aggregate Metrics",
+    `Total Trades: ${allTrades.length}`,
+    `Total PnL: $${totalPnl.toFixed(2)}`,
+    `Win Rate: ${winRate}%`,
+    `Avg Win: $${avgWin}, Avg Loss: $${avgLoss}`,
+  );
+
+  // Instrument breakdown across portfolio
+  const instrPnl: Record<string, { n: number; pnl: number }> = {};
+  for (const t of allTrades) {
+    const e = (instrPnl[t.instrument] ??= { n: 0, pnl: 0 });
+    e.n++; e.pnl += t.pnlNet;
+  }
+  const instrSummary = Object.entries(instrPnl)
+    .sort((a, b) => b[1].pnl - a[1].pnl)
+    .slice(0, 10)
+    .map(([i, d]) => `${i}: ${d.n} trades, $${d.pnl.toFixed(2)}`)
+    .join("; ");
+  lines.push("", "## Instruments", instrSummary);
 
   return lines.join("\n");
 }
