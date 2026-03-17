@@ -42,7 +42,30 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export function EquityCurve({ data, title = "Equity Curve" }: EquityCurveProps) {
   const [overlays, setOverlays] = useState<string[]>([]);
-  const validData = data.filter((d) => isFinite(d.equity));
+
+  // Sort by timestamp and filter invalid
+  const sortedData = [...data]
+    .filter((d) => isFinite(d.equity) && isFinite(new Date(d.timestamp).getTime()))
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // Downsample if too many points (keep first, last, peaks, and evenly spaced)
+  const MAX_POINTS = 500;
+  const validData = sortedData.length > MAX_POINTS
+    ? (() => {
+        const step = (sortedData.length - 1) / (MAX_POINTS - 1);
+        const indices = new Set<number>([0, sortedData.length - 1]);
+        for (let i = 0; i < MAX_POINTS; i++) indices.add(Math.round(i * step));
+        // Always include peak and trough
+        let maxIdx = 0, minIdx = 0;
+        sortedData.forEach((d, i) => {
+          if (d.equity > sortedData[maxIdx].equity) maxIdx = i;
+          if (d.equity < sortedData[minIdx].equity) minIdx = i;
+        });
+        indices.add(maxIdx);
+        indices.add(minIdx);
+        return Array.from(indices).sort((a, b) => a - b).map((i) => sortedData[i]);
+      })()
+    : sortedData;
 
   // Determine date format based on time span
   const spanMs = validData.length >= 2
@@ -51,6 +74,11 @@ export function EquityCurve({ data, title = "Equity Curve" }: EquityCurveProps) 
   const spanDays = spanMs / (1000 * 60 * 60 * 24);
   const dateFmt = spanDays >= 730 ? "MMM ''yy" : spanDays >= 60 ? "MMM dd ''yy" : "MMM dd";
   const tickInterval = validData.length > 10 ? Math.max(1, Math.floor(validData.length / 10)) : 0;
+
+  // Date range subtitle
+  const dateRange = validData.length >= 2
+    ? `${formatEST(validData[0].timestamp, "MMM dd, yyyy")} – ${formatEST(validData[validData.length - 1].timestamp, "MMM dd, yyyy")} ET`
+    : "";
 
   let runningPeak = 0;
   const chartData = validData.map((d, i) => {
