@@ -19,7 +19,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-card border border-border rounded-lg p-2 text-xs shadow-lg">
-      <p className="text-muted-foreground mb-1">{label}</p>
+      <p className="text-muted-foreground mb-1">{payload[0]?.payload?.fullDate ?? label}</p>
       {payload.map((entry: any, i: number) => {
         const isEquity = entry.dataKey === "equityPos" || entry.dataKey === "equityNeg";
         if (isEquity) {
