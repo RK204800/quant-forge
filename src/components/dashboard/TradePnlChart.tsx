@@ -1,7 +1,7 @@
 import { Trade } from "@/types";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { format } from "date-fns";
+import { formatEST } from "@/lib/timezone";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface TradePnlChartProps {
