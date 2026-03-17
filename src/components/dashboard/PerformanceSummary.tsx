@@ -2,7 +2,7 @@ import { Trade, EquityPoint, ExtendedMetrics } from "@/types";
 import { calculateMetricsByDirection } from "@/lib/analytics";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { format } from "date-fns";
+import { formatEST } from "@/lib/timezone";
 
 interface PerformanceSummaryProps {
   trades: Trade[];
