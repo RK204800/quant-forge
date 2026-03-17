@@ -151,7 +151,7 @@ const CompareStrategies = () => {
       if (sorted.length === 0) return;
       const startEquity = sorted[0].equity;
       sorted.forEach((p) => {
-        const dateKey = format(new Date(p.timestamp), "yyyy-MM-dd");
+        const dateKey = getESTDateKey(p.timestamp);
         const row = allDates.get(dateKey) || {};
         // Normalize to percentage return from start
         row[s.id] = startEquity > 0 ? ((p.equity - startEquity) / startEquity) * 100 : 0;
@@ -162,7 +162,7 @@ const CompareStrategies = () => {
     return Array.from(allDates.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, values]) => ({
-        date: format(new Date(date), "MMM dd"),
+        date: formatEST(new Date(date), "MMM dd"),
         ...values,
       }));
   }, [selected]);
