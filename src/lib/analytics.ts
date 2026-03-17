@@ -252,16 +252,19 @@ export function groupByDayOfWeek(trades: Trade[]): Map<string, Trade[]> {
 export function groupByPeriod(trades: Trade[], period: "daily" | "weekly" | "monthly"): Map<string, Trade[]> {
   const groups = new Map<string, Trade[]>();
   trades.forEach((t) => {
-    const d = new Date(t.exitTime);
     let key: string;
     if (period === "daily") {
-      key = d.toISOString().slice(0, 10);
+      key = getESTDateKey(t.exitTime);
     } else if (period === "weekly") {
-      const startOfWeek = new Date(d);
-      startOfWeek.setDate(d.getDate() - d.getDay());
-      key = startOfWeek.toISOString().slice(0, 10);
+      // Get EST date key, then find start of week
+      const estDateStr = getESTDateKey(t.exitTime);
+      const dow = getESTDayOfWeek(t.exitTime);
+      const d = new Date(estDateStr);
+      d.setDate(d.getDate() - dow);
+      key = d.toISOString().slice(0, 10);
     } else {
-      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const { year, month } = getESTYearMonth(t.exitTime);
+      key = `${year}-${String(month + 1).padStart(2, "0")}`;
     }
     const arr = groups.get(key) || [];
     arr.push(t);
