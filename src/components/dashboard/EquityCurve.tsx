@@ -19,7 +19,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-card border border-border rounded-lg p-2 text-xs shadow-lg">
-      <p className="text-muted-foreground mb-1">{label}</p>
+      <p className="text-muted-foreground mb-1">{payload[0]?.payload?.fullDate ?? label}</p>
       {payload.map((entry: any, i: number) => {
         const isEquity = entry.dataKey === "equityPos" || entry.dataKey === "equityNeg";
         if (isEquity) {
@@ -44,6 +44,14 @@ export function EquityCurve({ data, title = "Equity Curve" }: EquityCurveProps) 
   const [overlays, setOverlays] = useState<string[]>([]);
   const validData = data.filter((d) => isFinite(d.equity));
 
+  // Determine date format based on time span
+  const spanMs = validData.length >= 2
+    ? new Date(validData[validData.length - 1].timestamp).getTime() - new Date(validData[0].timestamp).getTime()
+    : 0;
+  const spanDays = spanMs / (1000 * 60 * 60 * 24);
+  const dateFmt = spanDays >= 730 ? "MMM ''yy" : spanDays >= 60 ? "MMM dd ''yy" : "MMM dd";
+  const tickInterval = validData.length > 10 ? Math.max(1, Math.floor(validData.length / 10)) : 0;
+
   let runningPeak = 0;
   const chartData = validData.map((d, i) => {
     const eq = safeNum(d.equity);
@@ -52,7 +60,8 @@ export function EquityCurve({ data, title = "Equity Curve" }: EquityCurveProps) 
     const dailyReturn = prevEq !== 0 ? ((eq - prevEq) / Math.abs(prevEq)) * 100 : 0;
 
     return {
-      date: format(new Date(d.timestamp), "MMM dd"),
+      date: format(new Date(d.timestamp), dateFmt),
+      fullDate: format(new Date(d.timestamp), "MMM dd, yyyy"),
       equity: eq,
       equityPos: Math.max(eq, 0),
       equityNeg: Math.min(eq, 0),
@@ -83,7 +92,7 @@ export function EquityCurve({ data, title = "Equity Curve" }: EquityCurveProps) 
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 18%)" />
-              <XAxis dataKey="date" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+              <XAxis dataKey="date" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} interval={tickInterval} />
               <YAxis yAxisId="equity" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => { const abs = Math.abs(v); const label = abs >= 1000 ? `$${(abs/1000).toFixed(0)}k` : `$${abs.toFixed(0)}`; return v < 0 ? `-${label}` : label; }} />
               {(showDrawdown || showDaily) && (
                 <YAxis yAxisId="pct" orientation="right" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${safeNum(v).toFixed(0)}%`} />
