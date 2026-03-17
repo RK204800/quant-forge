@@ -109,7 +109,7 @@ const CompareStrategies = () => {
       const pdfH = (imgH * pdfW) / imgW;
       const pdf = new jsPDF({ orientation: pdfH > 420 ? "portrait" : "landscape", unit: "mm", format: [pdfW, pdfH] });
       pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
-      pdf.save(`strategy-comparison-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+      pdf.save(`strategy-comparison-${formatEST(new Date(), "yyyy-MM-dd")}.pdf`);
     } finally { setExporting(false); }
   }, []);
 
