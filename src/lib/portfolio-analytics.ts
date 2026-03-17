@@ -1,6 +1,6 @@
 import { Trade, EquityPoint, MonteCarloResult } from "@/types";
 import { runMonteCarlo } from "@/lib/monte-carlo";
-import { format } from "date-fns";
+import { getESTDateKey } from "@/lib/timezone";
 
 export interface StrategyWithWeight {
   id: string;
