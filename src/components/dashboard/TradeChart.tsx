@@ -31,8 +31,7 @@ export function TradeChart({ trades, instrument }: TradeChartProps) {
 
     sortedTrades.forEach((t) => {
       const addPoint = (time: string, price: number) => {
-        const d = new Date(time);
-        const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        const dayKey = getESTDateKey(time);
         if (seen.has(dayKey)) {
           const existing = syntheticCandles.find((c) => String(c.time) === dayKey);
           if (existing) {
