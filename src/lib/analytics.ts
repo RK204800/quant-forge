@@ -226,9 +226,9 @@ function computeMaxRecoveryDays(curve: EquityPoint[]): number {
 export function groupByTimeOfDay(trades: Trade[], useEntryTime = false): Map<string, Trade[]> {
   const groups = new Map<string, Trade[]>();
   trades.forEach((t) => {
-    const d = new Date(useEntryTime ? t.entryTime : t.exitTime);
-    const h = d.getHours();
-    const m = d.getMinutes() < 30 ? 0 : 30;
+    const timeStr = useEntryTime ? t.entryTime : t.exitTime;
+    const h = getESTHour(timeStr);
+    const m = getESTMinutes(timeStr) < 30 ? 0 : 30;
     const key = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
     const arr = groups.get(key) || [];
     arr.push(t);
