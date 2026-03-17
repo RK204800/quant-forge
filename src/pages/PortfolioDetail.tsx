@@ -69,36 +69,39 @@ const PortfolioDetail = () => {
     if (memberStrategies.length === 0) return [];
     const totalWeight = memberStrategies.reduce((a, s) => a + s.weight, 0) || 1;
 
-    // Build sorted equity maps per strategy
+    // Build sorted equity maps per strategy using epoch for reliable comparison
     const strategyMaps = memberStrategies.map((s) => {
       const w = s.weight / totalWeight;
-      // sorted by timestamp
-      const sorted = [...s.equityCurve].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      const sorted = [...s.equityCurve]
+        .map((p) => ({ ...p, _epoch: new Date(p.timestamp).getTime() }))
+        .filter((p) => isFinite(p._epoch))
+        .sort((a, b) => a._epoch - b._epoch);
       return { sorted, weight: w };
     });
 
-    // Collect all unique timestamps across all strategies
-    const tsSet = new Set<string>();
-    strategyMaps.forEach(({ sorted }) => sorted.forEach((p) => tsSet.add(p.timestamp)));
-    const allTimestamps = Array.from(tsSet).sort();
+    // Collect all unique timestamps using epoch keys
+    const epochMap = new Map<number, string>();
+    strategyMaps.forEach(({ sorted }) =>
+      sorted.forEach((p) => {
+        if (!epochMap.has(p._epoch)) epochMap.set(p._epoch, p.timestamp);
+      })
+    );
+    const allEpochs = Array.from(epochMap.keys()).sort((a, b) => a - b);
 
-    if (allTimestamps.length === 0) return [];
+    if (allEpochs.length === 0) return [];
 
-    // For each strategy, build a quick lookup index
     const curve: EquityPoint[] = [];
-    const lastKnown = new Array(strategyMaps.length).fill(0); // carry-forward equity per strategy
-    const pointers = new Array(strategyMaps.length).fill(0); // current index into each sorted array
-
+    const lastKnown = new Array(strategyMaps.length).fill(0);
+    const pointers = new Array(strategyMaps.length).fill(0);
     let peak = 0;
 
-    for (const ts of allTimestamps) {
+    for (const epoch of allEpochs) {
       let equity = 0;
       for (let si = 0; si < strategyMaps.length; si++) {
         const { sorted, weight } = strategyMaps[si];
-        // Advance pointer to the latest point <= ts
         while (
           pointers[si] < sorted.length &&
-          sorted[pointers[si]].timestamp <= ts
+          sorted[pointers[si]]._epoch <= epoch
         ) {
           lastKnown[si] = sorted[pointers[si]].equity;
           pointers[si]++;
@@ -107,7 +110,7 @@ const PortfolioDetail = () => {
       }
       peak = Math.max(peak, equity);
       const drawdown = peak > 0 ? +((peak - equity) / peak).toFixed(4) : 0;
-      curve.push({ timestamp: ts, equity: +equity.toFixed(2), drawdown });
+      curve.push({ timestamp: epochMap.get(epoch)!, equity: +equity.toFixed(2), drawdown });
     }
 
     return curve;
