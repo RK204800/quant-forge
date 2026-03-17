@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EquityPoint } from "@/types";
 import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, ReferenceLine } from "recharts";
-import { format } from "date-fns";
+import { formatEST } from "@/lib/timezone";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 interface EquityCurveProps {
