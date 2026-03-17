@@ -107,7 +107,10 @@ export function EquityCurve({ data, title = "Equity Curve" }: EquityCurveProps) 
     <Card className="bg-card border-border">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{title}</CardTitle>
+          <div>
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{title}</CardTitle>
+            {dateRange && <p className="text-[10px] text-muted-foreground/60 font-mono mt-0.5">{dateRange}</p>}
+          </div>
           <ToggleGroup type="multiple" value={overlays} onValueChange={setOverlays} className="gap-0.5">
             <ToggleGroupItem value="drawdown" className="text-[10px] h-6 px-2 font-mono">DD</ToggleGroupItem>
             <ToggleGroupItem value="peak" className="text-[10px] h-6 px-2 font-mono">Peak</ToggleGroupItem>
