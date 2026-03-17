@@ -310,7 +310,7 @@ function getResampledDailyReturns(curve: EquityPoint[]): number[] {
   const sorted = [...curve].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   const equityByDate = new Map<string, number>();
   sorted.forEach((p) => {
-    const dateKey = new Date(p.timestamp).toISOString().slice(0, 10);
+    const dateKey = getESTDateKey(p.timestamp);
     equityByDate.set(dateKey, p.equity);
   });
   const firstDate = new Date(sorted[0].timestamp);

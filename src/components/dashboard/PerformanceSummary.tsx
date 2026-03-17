@@ -22,7 +22,7 @@ function formatVal(val: number, fmt: "dollar" | "pct" | "ratio" | "int" | "days"
 
 function formatDate(d: string): string {
   if (!d) return "—";
-  try { return format(new Date(d), "MMM dd, yyyy"); } catch { return "—"; }
+  return formatEST(d, "MMM dd, yyyy") + " ET";
 }
 
 interface MetricRow {

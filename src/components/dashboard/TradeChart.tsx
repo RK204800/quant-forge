@@ -87,10 +87,8 @@ export function TradeChart({ trades, instrument }: TradeChartProps) {
 
     const markers = trades
       .flatMap((t) => {
-        const entryDate = new Date(t.entryTime);
-        const exitDate = new Date(t.exitTime);
-        const entryDay = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, "0")}-${String(entryDate.getDate()).padStart(2, "0")}`;
-        const exitDay = `${exitDate.getFullYear()}-${String(exitDate.getMonth() + 1).padStart(2, "0")}-${String(exitDate.getDate()).padStart(2, "0")}`;
+        const entryDay = getESTDateKey(t.entryTime);
+        const exitDay = getESTDateKey(t.exitTime);
 
         return [
           {

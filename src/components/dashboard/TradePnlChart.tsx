@@ -13,7 +13,7 @@ export function TradePnlChart({ trades }: TradePnlChartProps) {
   let cumPnl = 0;
   const chartData = sorted.map((t, i) => {
     cumPnl += t.pnlNet;
-    return { index: i + 1, pnl: t.pnlNet, cumPnl, date: format(new Date(t.exitTime), "MM/dd"), instrument: t.instrument, commission: t.commission };
+    return { index: i + 1, pnl: t.pnlNet, cumPnl, date: formatEST(t.exitTime, "MM/dd"), instrument: t.instrument, commission: t.commission };
   });
 
   return (

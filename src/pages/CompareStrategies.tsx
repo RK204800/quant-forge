@@ -752,7 +752,7 @@ const CompareStrategies = () => {
                       <th className="text-left text-xs text-muted-foreground font-mono py-2 pr-3 sticky left-0 bg-card" />
                       {monthlyReturnsData.months.map((m) => (
                         <th key={m} className="text-center text-[10px] font-mono text-muted-foreground py-2 px-2 min-w-[60px]">
-                          {format(new Date(m + "-01"), "MMM yy")}
+                          {formatEST(new Date(m + "-01"), "MMM yy")}
                         </th>
                       ))}
                     </tr>

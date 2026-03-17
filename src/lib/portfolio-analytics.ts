@@ -138,7 +138,7 @@ function getDailyReturns(curve: EquityPoint[]): Map<string, number> {
   );
   const daily = new Map<string, number>();
   for (let i = 1; i < sorted.length; i++) {
-    const dateKey = format(new Date(sorted[i].timestamp), "yyyy-MM-dd");
+    const dateKey = getESTDateKey(sorted[i].timestamp);
     const ret = sorted[i].equity - sorted[i - 1].equity;
     daily.set(dateKey, ret);
   }
