@@ -44,6 +44,14 @@ export function EquityCurve({ data, title = "Equity Curve" }: EquityCurveProps) 
   const [overlays, setOverlays] = useState<string[]>([]);
   const validData = data.filter((d) => isFinite(d.equity));
 
+  // Determine date format based on time span
+  const spanMs = validData.length >= 2
+    ? new Date(validData[validData.length - 1].timestamp).getTime() - new Date(validData[0].timestamp).getTime()
+    : 0;
+  const spanDays = spanMs / (1000 * 60 * 60 * 24);
+  const dateFmt = spanDays >= 730 ? "MMM ''yy" : spanDays >= 60 ? "MMM dd ''yy" : "MMM dd";
+  const tickInterval = validData.length > 10 ? Math.max(1, Math.floor(validData.length / 10)) : 0;
+
   let runningPeak = 0;
   const chartData = validData.map((d, i) => {
     const eq = safeNum(d.equity);
@@ -52,7 +60,8 @@ export function EquityCurve({ data, title = "Equity Curve" }: EquityCurveProps) 
     const dailyReturn = prevEq !== 0 ? ((eq - prevEq) / Math.abs(prevEq)) * 100 : 0;
 
     return {
-      date: format(new Date(d.timestamp), "MMM dd"),
+      date: format(new Date(d.timestamp), dateFmt),
+      fullDate: format(new Date(d.timestamp), "MMM dd, yyyy"),
       equity: eq,
       equityPos: Math.max(eq, 0),
       equityNeg: Math.min(eq, 0),
