@@ -92,7 +92,7 @@ export function EquityCurve({ data, title = "Equity Curve" }: EquityCurveProps) 
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 18%)" />
-              <XAxis dataKey="date" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+              <XAxis dataKey="date" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} interval={tickInterval} />
               <YAxis yAxisId="equity" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => { const abs = Math.abs(v); const label = abs >= 1000 ? `$${(abs/1000).toFixed(0)}k` : `$${abs.toFixed(0)}`; return v < 0 ? `-${label}` : label; }} />
               {(showDrawdown || showDaily) && (
                 <YAxis yAxisId="pct" orientation="right" tick={{ fill: "hsl(215 15% 55%)", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${safeNum(v).toFixed(0)}%`} />
