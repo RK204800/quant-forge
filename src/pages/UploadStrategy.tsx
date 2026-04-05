@@ -41,16 +41,19 @@ const UploadStrategy = () => {
   const saveStrategy = useSaveStrategy();
 
   const handleParsed = useCallback((files: ParsedFile[]) => {
-    const newItems: QueueItem[] = files.map((f) => ({
-      id: crypto.randomUUID(),
-      result: f.result,
-      fileName: f.fileName,
-      name: fileNameToStrategyName(f.fileName),
-      status: "pending",
-      rawContent: f.rawContent,
-      headers: f.headers,
-      sampleRows: f.sampleRows,
-    }));
+    const newItems: QueueItem[] = files.map((f) => {
+      const metaName = f.result.parameters?.strategy_name;
+      return {
+        id: crypto.randomUUID(),
+        result: f.result,
+        fileName: f.fileName,
+        name: metaName ? String(metaName) : fileNameToStrategyName(f.fileName),
+        status: "pending",
+        rawContent: f.rawContent,
+        headers: f.headers,
+        sampleRows: f.sampleRows,
+      };
+    });
     setQueue((prev) => [...prev, ...newItems]);
   }, []);
 
@@ -128,8 +131,17 @@ const UploadStrategy = () => {
 
       try {
         await new Promise<void>((resolve, reject) => {
+          const params = item.result.parameters ?? {};
           saveStrategy.mutate(
-            { name: item.name, trades: item.result.trades, equityCurve: item.result.equityCurve, format: item.result.format },
+            {
+              name: item.name,
+              trades: item.result.trades,
+              equityCurve: item.result.equityCurve,
+              format: item.result.format,
+              ...(params.timeframe ? { timeframe: String(params.timeframe) } : {}),
+              ...(params.asset_class ? { assetClass: String(params.asset_class) } : {}),
+              ...(params.backtest_engine ? { backtestEngine: String(params.backtest_engine) } : {}),
+            },
             {
               onSuccess: () => {
                 setQueue((prev) => prev.map((q) => (q.id === item.id ? { ...q, status: "saved" } : q)));
