@@ -172,7 +172,7 @@ export interface JournalEntry {
   createdAt: string;
 }
 
-export type FileFormat = "backtrader" | "ninjatrader" | "quantconnect" | "tradingview" | "generic" | "mapped";
+export type FileFormat = "backtrader" | "ninjatrader" | "quantconnect" | "tradingview" | "nautilustrader" | "generic" | "mapped";
 
 export type TradeField =
   | "entryTime"

@@ -3,6 +3,7 @@ import { parseBacktraderCSV } from "./backtrader";
 import { parseNinjaTrader } from "./ninjatrader";
 import { parseQuantConnect } from "./quantconnect";
 import { parseTradingView } from "./tradingview";
+import { parseNautilusTrader } from "./nautilustrader";
 import { normalizeHeader, stripPrelude, detectDelimiter } from "./utils";
 
 export interface ParseResult {
@@ -28,6 +29,9 @@ export function detectFormat(content: string, fileName: string): FileFormat {
   const headerCols = rawHeader.split(delimiter).map((c) => normalizeHeader(c.replace(/^"|"$/g, "")));
   const header = headerCols.join("");
 
+  // NautilusTrader: pnl_net + mae + mfe together
+  if (headerCols.includes("pnlnet") && headerCols.includes("mae") && headerCols.includes("mfe")) return "nautilustrader";
+
   // NinjaTrader: has separate entry/exit price columns or marketpos
   if (headerCols.includes("instrument") && (headerCols.some(c => c.startsWith("marketpos")) || headerCols.includes("marketposition"))) return "ninjatrader";
   if ((headerCols.includes("tradenumber") || headerCols.includes("tradeno") || headerCols.includes("trade")) && headerCols.includes("entryprice")) return "ninjatrader";
@@ -48,6 +52,7 @@ export function detectFormat(content: string, fileName: string): FileFormat {
 type ParserFn = (content: string, strategyId: string) => ParseResult;
 
 const PARSERS: [FileFormat, ParserFn][] = [
+  ["nautilustrader", parseNautilusTrader],
   ["ninjatrader", parseNinjaTrader],
   ["backtrader", parseBacktraderCSV],
   ["tradingview", parseTradingView],
@@ -81,6 +86,9 @@ export function parseFile(content: string, fileName: string, strategyId: string)
   switch (format) {
     case "quantconnect":
       return parseQuantConnect(preprocessed, strategyId);
+    case "nautilustrader":
+      result = parseNautilusTrader(preprocessed, strategyId);
+      break;
     case "ninjatrader":
       result = parseNinjaTrader(preprocessed, strategyId);
       break;
