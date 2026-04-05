@@ -1,149 +1,42 @@
 
 
-## World-Class Portfolio Risk Management Suite
+## Add NautilusTrader CSV Parser
 
 ### Overview
-Add a comprehensive "Portfolio Risk Assessment" tab/section to the Portfolio Detail page with institutional-grade risk management analytics. This is a pure client-side computation layer -- no database changes needed.
+Add a dedicated parser for NautilusTrader CSV exports with optional JSON metadata header, and wire it into the existing detection/parsing pipeline.
 
-### New File: `src/lib/portfolio-analytics.ts`
-
-A dedicated analytics engine for portfolio-level risk computations containing all the functions below.
-
-#### 1. Kelly Criterion Position Sizing
-- **Per-strategy Kelly fraction**: `f* = W - (1-W)/R` where W = win rate, R = avg win / avg loss
-- **Half-Kelly** (industry standard conservative): `f*/2`
-- **Portfolio-level Kelly**: Optimal fraction adjusted for correlation between strategies
-- Display recommended allocation vs current allocation with a comparison table
-
-#### 2. Conservative Drawdown Stress Test (MAE-based)
-- For each strategy, find the worst MAE across all trades (or estimated MAE)
-- **Concurrent worst-case**: Sum of all strategies' worst MAEs simultaneously (assume all open positions hit max adverse excursion at once)
-- **Weighted worst-case**: Apply portfolio weights to the concurrent MAE sum
-- Show as dollar amount and as percentage of a user-configurable account size (default $100,000)
-- Display per-strategy MAE contribution breakdown
-
-#### 3. Portfolio Heat / Margin of Safety
-- **Portfolio Heat** = sum of all position risks (worst-case stop distances) as % of capital
-- Risk budget consumed: how much of a configurable max-risk threshold (e.g. 6% of capital) is used
-- Traffic-light indicator: Green (<50% budget), Yellow (50-80%), Red (>80%)
-
-#### 4. Diversification Score
-- Uses existing correlation matrix computation (Pearson)
-- **Diversification Ratio** = weighted sum of individual volatilities / portfolio volatility
-- Higher ratio = better diversification
-- Score normalized 0-100 with interpretation labels (Poor / Fair / Good / Excellent)
-
-#### 5. Tail Risk Analysis (CVaR / Expected Shortfall)
-- **Value at Risk (VaR)** at 95% and 99% confidence from combined daily PnL distribution
-- **Conditional VaR (CVaR)**: Average loss in the worst 5% of days
-- Per-strategy contribution to portfolio tail risk
-
-#### 6. Portfolio Monte Carlo
-- Run Monte Carlo on the combined portfolio trade stream (interleaved by date, weighted)
-- Show portfolio-level percentile equity paths, risk of ruin, and max drawdown distribution
-- Reuses existing `runMonteCarlo` logic with combined PnL stream
-
-#### 7. Concentration Risk
-- **Herfindahl-Hirschman Index (HHI)** of portfolio weights
-- Flag if any single strategy exceeds configurable threshold (e.g. 40%)
-- Instrument overlap detection: count shared instruments across strategies
-
-#### 8. Portfolio Stability Score
-- Composite score (0-100) combining:
-  - Diversification ratio (25%)
-  - Kelly alignment (25%) -- how close current weights are to optimal
-  - Drawdown resilience (25%) -- worst-case MAE vs capital
-  - Tail risk grade (25%) -- CVaR relative to expected return
-- Letter grade: A+ through F
-
-### New Component: `src/components/portfolio/PortfolioRiskAssessment.tsx`
-
-A tabbed or sectioned component that renders all the above analytics:
-
-```text
-+------------------------------------------------------+
-| PORTFOLIO RISK ASSESSMENT                            |
-|------------------------------------------------------|
-| [Overall Score: A-  (82/100)]                        |
-|                                                      |
-| +-- Risk Summary Cards (4-col grid) ---------------+ |
-| | Kelly Optimal | Worst-Case DD | VaR 95% | Heat   | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Kelly Position Sizing Table -------------------+ |
-| | Strategy | WinRate | R:R | Kelly | Half-Kelly |  | |
-| |          |         |     | Curr% | Suggest%   |  | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Stress Test (MAE Concurrent) ------------------+ |
-| | Strategy | Worst MAE | Weight | Contrib          | |
-| | TOTAL    | $X,XXX    | ---    | $X,XXX           | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Tail Risk (VaR / CVaR) -----------------------+ | 
-| | VaR 95%: $X,XXX  |  CVaR 95%: $X,XXX           | |
-| | VaR 99%: $X,XXX  |  CVaR 99%: $X,XXX           | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Concentration & Diversification ---------------+ |
-| | HHI: 0.XX  |  Div Ratio: X.XX  |  Score: XX/100 | |
-| | Instrument Overlap Matrix                        | |
-| +--------------------------------------------------+ |
-|                                                      |
-| +-- Portfolio Monte Carlo -------------------------+ |
-| | (Reuses MonteCarloChart with combined PnLs)      | |
-| +--------------------------------------------------+ |
-+------------------------------------------------------+
-```
-
-### Integration into PortfolioDetail.tsx
-
-- Add the `<PortfolioRiskAssessment>` component after the correlation matrix
-- Pass `memberStrategies` (with trades, equity curves, weights) and an `accountSize` prop (default 100k, editable inline)
-- Only renders when 1+ strategies are in the portfolio
+### Detection Logic
+In `detectFormat()`, add a check **before** the NinjaTrader block: if normalized header columns contain all three of `pnlnet`, `mae`, `mfe` → return `"nautilustrader"`.
 
 ### Files to Create
-- `src/lib/portfolio-analytics.ts` -- all computation functions
-- `src/components/portfolio/PortfolioRiskAssessment.tsx` -- full UI component
+
+**`src/lib/parsers/nautilustrader.ts`**
+- Extract optional JSON metadata from first line if it starts with `#` — parse `{"strategy_name", "source_url", "timeframe", "asset_class", "backtest_engine"}` and attach to `ParseResult.parameters`
+- If metadata line exists, skip it before CSV parsing (use PapaParse with `header: true`)
+- Map columns directly: `entry_time`, `exit_time`, `direction`, `entry_price`, `exit_price`, `quantity`, `pnl_net`, `commission`, `instrument`, `mae`, `mfe`
+- Build equity curve from running PnL sum
+- Follow the same pattern as `backtrader.ts`
 
 ### Files to Modify
-- `src/pages/PortfolioDetail.tsx` -- import and render the new component
 
-### Technical Details
+**`src/types/index.ts`**
+- Add `"nautilustrader"` to the `FileFormat` union type
 
-**Kelly Criterion formula:**
-```text
-f* = W - (1 - W) / R
-where W = win rate (decimal), R = avgWin / avgLoss
-Half-Kelly = f* / 2
-```
+**`src/lib/parsers/index.ts`**
+- Import `parseNautilusTrader` from `./nautilustrader`
+- Add detection rule in `detectFormat()` for `pnlnet` + `mae` + `mfe`
+- Add `["nautilustrader", parseNautilusTrader]` to the `PARSERS` fallback array
+- Add case in `parseFile()` switch
 
-**Diversification Ratio:**
-```text
-DR = (sum of w_i * sigma_i) / sigma_portfolio
-where sigma_portfolio = sqrt(w' * C * w), C = covariance matrix
-```
+**`src/pages/UploadStrategy.tsx`**
+- When building the save payload (line ~132), spread any `result.parameters` metadata (strategy name, timeframe, assetClass, backtestEngine) into the `saveStrategy.mutate()` call so parsed metadata auto-populates the strategy record
 
-**CVaR calculation:**
-```text
-Sort daily PnLs ascending
-VaR_95 = PnL at 5th percentile
-CVaR_95 = mean of all PnLs below VaR_95
-```
+**`src/components/upload/UploadZone.tsx`**
+- Pass metadata through in the `ParsedFile` result (already works — no change needed since `ParseResult.parameters` flows through)
 
-**HHI (concentration):**
-```text
-HHI = sum(w_i^2) where w_i are normalized weights
-Range: 1/n (perfect diversification) to 1.0 (single strategy)
-```
+### Metadata Auto-Population
+The `ParseResult.parameters` field will carry the NautilusTrader metadata. In `UploadStrategy.tsx`, when saving, if `result.parameters?.backtest_engine` exists, pass it as `backtestEngine`; same for `timeframe`, `assetClass`, and use `strategy_name` as the default queue item name.
 
-**Composite Portfolio Score weighting:**
-```text
-Score = 0.25 * diversification_score
-      + 0.25 * kelly_alignment_score
-      + 0.25 * drawdown_resilience_score
-      + 0.25 * tail_risk_grade
-```
-
-All computations are client-side using existing trade data -- no API calls or database changes required.
+### No DB Changes Needed
+The existing `backtest_engine` column on `strategies` table already accepts any string value.
 
